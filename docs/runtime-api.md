@@ -80,7 +80,7 @@ bin/unidbg-worker --mode ANDROID --entrypoint com.example.Task \
   --profile /absolute/profile.json --output-dir /absolute/new-session
 ```
 
-`--mode` 为 ANDROID 或 NATIVE_ONLY。安装校验使用 `--verify-installation <root>`；完整 SHA256 校验在发行/安装阶段执行，会话启动不重读大 SDK 或全部 JAR。直接 CLI 使用调用进程的真实 cwd；在启动前由 shell、Python 或 ProcessBuilder 设置，不通过修改 user.dir 冒充 chdir。`--request` 接收 client 生成的协议 JSON。`--help`、`--version` 无任务副作用。
+`--mode` 为 ANDROID 或 NATIVE_ONLY。会话启动检查 API 版本及所选 SDK 的必需文件，安装 manifest 记录版本、源码提交、依赖坐标和配置路径等构建事实。直接 CLI 使用调用进程的真实 cwd；在启动前由 shell、Python 或 ProcessBuilder 设置，不通过修改 user.dir 冒充 chdir。`--request` 接收 client 生成的协议 JSON。`--help`、`--version` 无任务副作用。
 
 `DirectMainEntrypoint` 的 arguments 为 `{"mainClass":"com.example.Main","arguments":["arg"]}`。它在同一执行域调用原 main，stdout 为原有机器数据，库日志保持 stderr；原 main 必须 return，不能调用 System.exit。
 

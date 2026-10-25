@@ -22,7 +22,6 @@ import picocli.CommandLine.Option;
 public final class WorkerMain implements Callable<Integer> {
     private static final ObjectMapper JSON = new ObjectMapper();
     @Option(names = "--request", description = "Runtime request JSON file") Path request;
-    @Option(names = "--verify-installation", description = "Verify all immutable installation files, without starting a session") Path verifyInstallation;
     @Option(names = "--mode", description = "NATIVE_ONLY or ANDROID") String mode;
     @Option(names = "--entrypoint", description = "WorkerEntrypoint implementation FQCN") String entrypoint;
     @Option(names = "--arguments", description = "Entrypoint JSON arguments file") Path arguments;
@@ -40,10 +39,6 @@ public final class WorkerMain implements Callable<Integer> {
     @Override
     public Integer call() throws Exception {
         System.setProperty("unidbg.startedNanos", Long.toString(System.nanoTime()));
-        if (verifyInstallation != null) {
-            System.out.println(JSON.writeValueAsString(InstallationVerifier.verify(verifyInstallation)));
-            return 0;
-        }
         if (request == null) request = createRequest();
         ObjectNode envelope = (ObjectNode) JSON.readTree(request.toFile());
         if (envelope.required("protocol").intValue() != RuntimeVersion.PROTOCOL

@@ -16,7 +16,7 @@
 
 ## 构建与安装
 
-先从固定提交构建两个正式依赖。unidbg 的已公开基线提交为 `c9bb60eabc6fced2594ae9b4471015d02bd0b7b8`，仓库为 `https://github.com/ai-repo-save/unidbg`；Robolectric fork 仓库为 `https://github.com/ai-repo-save/robolectric`，正式源码提交为 `5acbb2b2b793dbdf6993ed0412da66606634b3bf`，使用对应发行 provenance 核对。所有构建使用 JDK 21。
+先从固定提交构建两个正式依赖。unidbg 的已公开基线提交为 `c9bb60eabc6fced2594ae9b4471015d02bd0b7b8`，仓库为 `https://github.com/ai-repo-save/unidbg`；Robolectric fork 仓库为 `https://github.com/ai-repo-save/robolectric`，正式源码提交为 `5acbb2b2b793dbdf6993ed0412da66606634b3bf`。所有构建使用 JDK 21。
 
 ```sh
 (
@@ -41,18 +41,18 @@
 安装目录为 `worker/build/install/unidbg-worker`。Gradle 在发行构建内集中提取 AndroidX AAR 的 classes.jar，并显式准备预插桩 SDK；这些转换不要求复制到消费者构建脚本，也不声称会随 Maven POM 传播。Gradle、资源和 SDK 缓存不入 Git。
 
 ```sh
-./gradlew --offline --no-daemon :worker:verifyRuntime jniIntegration
+./gradlew --offline --no-daemon jniIntegration
 ```
 
-`verifyRuntime` 或 `bin/unidbg-worker --verify-installation <installation>` 在安装/发行阶段校验清单覆盖的 SDK、全部 JAR、自有 worker/client/SPI、脚本、JVM 参数与许可证。会话启动只核对版本、所选 SDK 及必需文件，不重复顺序读取大 SDK 做摘要，不添加失效缓存层。
+会话启动检查 API 版本、所选 SDK 和必需文件。runtime-manifest 记录版本、源码 Git 提交、依赖坐标、JDK/API 和 SDK 路径等构建事实。Gradle/Maven 负责依赖下载及其自身校验。
 
 `jniIntegration` 是唯一整体集成入口，不进入默认 test/check。每次运行重新执行，XML/HTML 与工作会话产物保存在独立 `build/evidence/<UTC 时间>/`。运行日志为 stderr 和每会话 `logs/worker.jsonl`；原始诊断、完整工作 JVM maps、Android 数据副本与结果文件分别保存。证据保留到显式 clean；活动 worker 期间不 clean 或覆盖安装。
 
-Gradle 9.5.0 发行 ZIP 的 SHA256 为 `553c78f50dafcd54d65b9a444649057857469edf836431389695608536d6b746`，不是 gradle-wrapper.jar 的摘要。
+构建使用 Gradle 9.5.0 官方 wrapper，发行下载校验由 wrapper 处理。
 
 ## 正式发行
 
-源码库为公开的 `https://github.com/ai-repo-save/unidbg-robolectric`。源码固定提交、Maven GAV、实际依赖及执行文件摘要由 POM、runtime-manifest 与 release manifest 绑定。首次远端/CI 构建可通过 HTTPS 获取固定提交的三个公开源码仓库，不需要私有 token，不发布大型 SDK 二进制到 Git。
+源码库为公开的 `https://github.com/ai-repo-save/unidbg-robolectric`。POM、runtime-manifest 与 release manifest 记录源码固定提交、Maven GAV 和依赖坐标。首次远端/CI 构建可通过 HTTPS 获取固定提交的三个公开源码仓库，不需要私有 token，不发布大型 SDK 二进制到 Git。
 
 干净提交下创建标准 Maven-layout 仓库和完整 worker ZIP：
 

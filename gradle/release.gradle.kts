@@ -1,5 +1,3 @@
-import java.security.MessageDigest
-import java.util.HexFormat
 import groovy.json.JsonOutput
 
 val releaseVersion = version.toString()
@@ -31,29 +29,17 @@ val writeReleaseManifest = tasks.register("writeReleaseManifest") {
         ":spi:publishAllPublicationsToReleaseRepository", ":worker:publishAllPublicationsToReleaseRepository")
     doLast {
         val repository = layout.buildDirectory.dir("repository").get().asFile
-        val files = repository.walkTopDown().filter { it.isFile && it.name != "runtime-release-manifest.json" }
-            .sortedBy { it.relativeTo(repository).path }.map { file ->
-                val digest = MessageDigest.getInstance("SHA-256")
-                file.inputStream().use { input ->
-                    val buffer = ByteArray(65536)
-                    while (true) {
-                        val count = input.read(buffer)
-                        if (count < 0) break
-                        digest.update(buffer, 0, count)
-                    }
-                }
-                mapOf("file" to file.relativeTo(repository).invariantSeparatorsPath,
-                    "sha256" to HexFormat.of().formatHex(digest.digest()))
-            }.toList()
         val commit = providers.exec { commandLine("git", "rev-parse", "HEAD") }.standardOutput.asText.get().trim()
         repository.resolve("runtime-release-manifest.json").writeText(JsonOutput.prettyPrint(JsonOutput.toJson(mapOf(
             "version" to releaseVersion, "sourceRepository" to "https://github.com/ai-repo-save/unidbg-robolectric",
-            "sourceCommit" to commit, "files" to files
+            "sourceCommit" to commit,
+            "coordinates" to listOf("client", "spi", "worker").map { "io.github.ai-repo-save:unidbg-robolectric-$it:$releaseVersion" },
+            "dependencyCoordinates" to listOf("io.github.ai-repo-save.unidbg:*:0.10.0", "io.github.ai-repo-save.robolectric:robolectric:1.0.0")
         ))))
     }
 }
 tasks.register("releaseLocal") {
     group = "publishing"
     description = "Publish the clean source release with its original stable fork artifacts."
-    dependsOn(validateRelease, writeReleaseManifest, ":worker:verifyRuntime")
+    dependsOn(validateRelease, writeReleaseManifest, ":worker:installDist")
 }
