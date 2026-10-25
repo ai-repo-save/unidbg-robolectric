@@ -13,13 +13,47 @@ plugins { java }
 
 java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
 
-repositories {
-    exclusiveContent {
-        forRepository { mavenLocal() }
-        filter { includeGroup("com.github.zhkl0228") }
+allprojects {
+    group = "io.github.ai-repo-save"
+    version = "1.0.0"
+    repositories {
+        providers.gradleProperty("unidbgRepository").orNull?.let { repository ->
+            maven { url = uri(repository); content { includeGroup("io.github.ai-repo-save.unidbg") } }
+        }
+        mavenLocal {
+            content {
+                includeGroup("io.github.ai-repo-save.unidbg")
+                includeVersion("com.github.zhkl0228", "unicorn", "1.0.15")
+                includeVersion("com.github.zhkl0228", "capstone", "3.1.8")
+                includeVersion("com.github.zhkl0228", "keystone", "0.9.7")
+                includeVersion("com.github.zhkl0228", "demumble", "1.0.4")
+            }
+        }
+        mavenCentral()
+        google { content { includeGroupByRegex("androidx\\..*") } }
     }
-    mavenCentral()
-    google { content { includeGroupByRegex("androidx\\..*") } }
+}
+
+subprojects {
+    apply(plugin = "java-library")
+    apply(plugin = "maven-publish")
+    extensions.configure<JavaPluginExtension> {
+        toolchain.languageVersion = JavaLanguageVersion.of(21)
+        withSourcesJar()
+        withJavadocJar()
+    }
+    extensions.configure<PublishingExtension> {
+        publications.create<MavenPublication>("library") {
+            from(components["java"])
+            artifactId = "unidbg-robolectric-${project.name}"
+            pom {
+                name = artifactId
+                description = "Isolated unidbg / Robolectric runtime"
+                licenses { license { name = "Apache License, Version 2.0"; url = "https://www.apache.org/licenses/LICENSE-2.0" } }
+            }
+        }
+        repositories { maven { name = "release"; url = rootProject.layout.buildDirectory.dir("repository").get().asFile.toURI() } }
+    }
 }
 
 // The Java plugin consumes jars; AndroidX publishes its test infrastructure as AARs.
@@ -37,10 +71,13 @@ abstract class AarClasses : TransformAction<TransformParameters.None> {
     }
 }
 
-dependencies {
-    registerTransform(AarClasses::class) {
+allprojects {
+    dependencies.registerTransform(AarClasses::class) {
         from.attribute(ARTIFACT_TYPE_ATTRIBUTE, "aar")
         to.attribute(ARTIFACT_TYPE_ATTRIBUTE, "jar")
+    }
+    configurations.matching { it.name.endsWith("Classpath") }.configureEach {
+        attributes.attribute(ARTIFACT_TYPE_ATTRIBUTE, "jar")
     }
 }
 
@@ -56,8 +93,8 @@ dependencies {
     add(integration.implementationConfigurationName, "junit:junit:4.13.2")
     add(integration.implementationConfigurationName, "org.robolectric:robolectric:4.17")
     add(integration.implementationConfigurationName, "org.robolectric:android-all:11-robolectric-6757853")
-    add(integration.implementationConfigurationName, "com.github.zhkl0228:unidbg-android:0.9.10-SNAPSHOT")
-    add(integration.implementationConfigurationName, "com.github.zhkl0228:unidbg-unicorn2:0.9.10-SNAPSHOT")
+    add(integration.implementationConfigurationName, "io.github.ai-repo-save.unidbg:unidbg-android:0.9.10")
+    add(integration.implementationConfigurationName, "io.github.ai-repo-save.unidbg:unidbg-unicorn2:0.9.10")
     add(integration.implementationConfigurationName, "org.slf4j:slf4j-api:2.0.20")
     add(integration.runtimeOnlyConfigurationName, "ch.qos.logback:logback-classic:1.5.18")
     add(integration.runtimeOnlyConfigurationName, "net.logstash.logback:logstash-logback-encoder:8.1")

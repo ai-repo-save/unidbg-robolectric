@@ -12,6 +12,15 @@
 !/gradle/**
 !/src/
 !/src/**
+!/client/
+!/client/**
+!/spi/
+!/spi/**
+!/worker/
+!/worker/**
+/client/build/
+/spi/build/
+/worker/build/
 !/scripts/
 !/scripts/**
 !/docs/
