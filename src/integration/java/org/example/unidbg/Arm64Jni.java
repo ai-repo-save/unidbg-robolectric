@@ -2,15 +2,11 @@ package org.example.unidbg;
 
 import com.github.unidbg.AndroidEmulator;
 import com.github.unidbg.Module;
-import com.github.unidbg.arm.backend.Unicorn2Factory;
-import com.github.unidbg.linux.android.AndroidEmulatorBuilder;
 import com.github.unidbg.linux.android.dvm.VM;
-import com.github.unidbg.linux.android.dvm.jni.ProxyClassFactory;
 import com.github.unidbg.linux.android.dvm.jni.ProxyDvmObject;
 import com.github.unidbg.memory.MemoryBlock;
 import com.github.unidbg.pointer.UnidbgPointer;
 import com.sun.jna.Pointer;
-import java.io.IOException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,6 +24,7 @@ final class Arm64Jni implements AutoCloseable {
     private static final int JNI_GET_STATIC_METHOD_ID = 113;
     private static final int JNI_CALL_STATIC_OBJECT_METHOD_A = 116;
     private static final int JNI_CALL_STATIC_BOOLEAN_METHOD_A = 119;
+    private static final int JNI_CALL_STATIC_LONG_METHOD_A = 134;
     private static final int JNI_GET_STATIC_FIELD_ID = 144;
     private static final int JNI_GET_STATIC_OBJECT_FIELD = 145;
     private static final int POINTER_BYTES = Long.BYTES;
@@ -42,25 +39,15 @@ final class Arm64Jni implements AutoCloseable {
     private final Pointer table;
     private final MemoryBlock scratch;
 
-    Arm64Jni(ClassLoader androidLoader) throws IOException {
-        emulator = AndroidEmulatorBuilder.for64Bit()
-                .addBackendFactory(new Unicorn2Factory(false)).build();
-        try {
-            vm = emulator.createDalvikVM();
-            vm.setDvmClassFactory(new ProxyClassFactory(androidLoader));
-            env = vm.getJNIEnv();
-            table = env.getPointer(0);
-            scratch = emulator.getMemory().malloc(SCRATCH_SIZE, true);
-            LOG.info("event=emulator_started backend={} backendLoader={} androidLoader={} vmLoader={} "
-                            + "unicornLoader={} androidAndVmLoaderSame={}",
-                    emulator.getBackend().getClass().getName(), emulator.getBackend().getClass().getClassLoader(),
-                    androidLoader, vm.getClass().getClassLoader(),
-                    com.github.unidbg.arm.backend.unicorn.Unicorn.class.getClassLoader(),
-                    androidLoader == vm.getClass().getClassLoader());
-        } catch (RuntimeException | Error failure) {
-            try { emulator.close(); } catch (IOException closeFailure) { failure.addSuppressed(closeFailure); }
-            throw failure;
-        }
+    Arm64Jni(AndroidEmulator emulator, VM vm) {
+        this.emulator = emulator;
+        this.vm = vm;
+        env = vm.getJNIEnv();
+        table = env.getPointer(0);
+        scratch = emulator.getMemory().malloc(SCRATCH_SIZE, true);
+        LOG.info("event=jni_attached backend={} vmLoader={} unicornLoader={}",
+                emulator.getBackend().getClass().getName(), vm.getClass().getClassLoader(),
+                com.github.unidbg.arm.backend.unicorn.Unicorn.class.getClassLoader());
     }
 
     int wrap(Object value) {
@@ -106,6 +93,12 @@ final class Arm64Jni implements AutoCloseable {
                 member(type, JNI_GET_STATIC_METHOD_ID, name, descriptor), arguments(args)) == VM.JNI_TRUE;
     }
 
+    long staticLongCall(String typeName, String name, String descriptor, int... args) {
+        int type = type(typeName);
+        return callNative(JNI_CALL_STATIC_LONG_METHOD_A, env, type,
+                member(type, JNI_GET_STATIC_METHOD_ID, name, descriptor), arguments(args)).longValue();
+    }
+
     Object staticObjectField(String typeName, String name, String descriptor) {
         int type = type(typeName);
         return value(invoke(JNI_GET_STATIC_OBJECT_FIELD, env, type,
@@ -131,8 +124,12 @@ final class Arm64Jni implements AutoCloseable {
     }
 
     private int invoke(int index, Object... args) {
-        int result = Module.emulateFunction(emulator,
-                UnidbgPointer.nativeValue(table.getPointer((long) index * POINTER_BYTES)), args).intValue();
+        return callNative(index, args).intValue();
+    }
+
+    private Number callNative(int index, Object... args) {
+        Number result = Module.emulateFunction(emulator,
+                UnidbgPointer.nativeValue(table.getPointer((long) index * POINTER_BYTES)), args);
         int exception = Module.emulateFunction(emulator,
                 UnidbgPointer.nativeValue(table.getPointer((long) JNI_EXCEPTION_OCCURRED * POINTER_BYTES)), env).intValue();
         if (exception != 0) {
@@ -142,8 +139,8 @@ final class Arm64Jni implements AutoCloseable {
     }
 
     @Override
-    public void close() throws IOException {
-        try { scratch.free(); } finally { emulator.close(); }
-        LOG.info("event=emulator_closed");
+    public void close() {
+        scratch.free();
+        LOG.info("event=jni_scratch_released");
     }
 }

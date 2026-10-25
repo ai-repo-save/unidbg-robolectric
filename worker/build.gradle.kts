@@ -4,7 +4,8 @@ dependencies {
     api(project(":spi"))
     implementation(project(":client"))
     implementation("org.robolectric:android-all:11-robolectric-6757853")
-    implementation("org.robolectric:robolectric:4.17")
+    implementation("io.github.ai-repo-save.robolectric:robolectric:1.0.0")
+    implementation("junit:junit:4.13.2")
     implementation("info.picocli:picocli:4.7.6")
     implementation("org.slf4j:slf4j-api:2.0.20")
     runtimeOnly("ch.qos.logback:logback-classic:1.5.18")
@@ -26,3 +27,5 @@ application {
         "--add-opens=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED"
     )
 }
+
+apply(from = "gradle/distribution.gradle.kts")

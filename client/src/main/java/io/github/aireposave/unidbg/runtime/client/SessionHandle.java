@@ -11,7 +11,6 @@ import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Comparator;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -36,7 +35,7 @@ public final class SessionHandle implements AutoCloseable {
                 int code = process.waitFor();
                 Path result = outputDirectory.resolve("result.json");
                 JsonNode value = Files.isRegularFile(result) ? JSON.readTree(result.toFile()) : JSON.createObjectNode();
-                RunResult.Status status = cancelled ? RunResult.Status.CANCELLED
+                RunResult.Status status = cancelled || value.path("status").asText().equals("CANCELLED") ? RunResult.Status.CANCELLED
                         : code == 0 && value.path("status").asText().equals("COMPLETED")
                         ? RunResult.Status.COMPLETED : RunResult.Status.FAILED;
                 completion.complete(new RunResult(status, code, process.pid(), value.path("payload"),
@@ -65,19 +64,24 @@ public final class SessionHandle implements AutoCloseable {
     public void cancel() throws IOException, InterruptedException {
         if (!process.isAlive()) return;
         cancelled = true;
-        Files.writeString(outputDirectory.resolve("cancel.request"), "cancel\n");
-        if (process.waitFor(request.cancellationGrace().toMillis(), TimeUnit.MILLISECONDS)) return;
-        var descendants = process.descendants().sorted(Comparator.comparingLong(ProcessHandle::pid).reversed()).toList();
-        descendants.forEach(ProcessHandle::destroy);
-        process.destroy();
-        if (!process.waitFor(request.terminationWait().toMillis(), TimeUnit.MILLISECONDS)) process.destroyForcibly();
-        for (ProcessHandle child : descendants) {
-            if (child.isAlive()) child.destroyForcibly();
-            child.onExit().join();
+        boolean interrupted = Thread.interrupted();
+        IOException signalFailure = null;
+        try { Files.writeString(outputDirectory.resolve("cancel.request"), "cancel\n"); }
+        catch (IOException failure) { signalFailure = failure; }
+        try {
+            if (!interrupted && signalFailure == null) {
+                try {
+                    if (process.waitFor(request.cancellationGrace().toMillis(), TimeUnit.MILLISECONDS)) return;
+                } catch (InterruptedException failure) { interrupted = true; }
+            }
+            ProcessTree.terminate(process, request.terminationWait());
+            Files.writeString(outputDirectory.resolve("aborted.json"),
+                    "{\"status\":\"CANCELLED\",\"finallyConfirmed\":false,\"pid\":" + process.pid() + "}");
+            if (signalFailure != null) throw signalFailure;
+        } finally {
+            if (interrupted) Thread.currentThread().interrupt();
         }
-        process.waitFor();
-        Files.writeString(outputDirectory.resolve("aborted.json"),
-                "{\"status\":\"CANCELLED\",\"finallyConfirmed\":false,\"pid\":" + process.pid() + "}");
+        if (Thread.currentThread().isInterrupted()) throw new InterruptedException("Interrupted while cancelling session " + process.pid());
     }
 
     @Override

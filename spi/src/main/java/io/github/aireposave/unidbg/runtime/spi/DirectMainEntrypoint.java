@@ -11,10 +11,19 @@ import java.util.ArrayList;
 public final class DirectMainEntrypoint implements WorkerEntrypoint {
     @Override
     public JsonNode run(WorkerSession session, JsonNode arguments) throws Exception {
-        String mainClass = arguments.required("mainClass").asText();
+        JsonNode className = arguments.required("mainClass");
+        if (!className.isTextual()) throw new IllegalArgumentException("mainClass must be a JSON string");
+        JsonNode argv = arguments.required("arguments");
+        if (!argv.isArray()) throw new IllegalArgumentException("arguments must be a JSON string array");
         var values = new ArrayList<String>();
-        for (JsonNode value : arguments.required("arguments")) values.add(value.asText());
-        var main = Class.forName(mainClass, true, getClass().getClassLoader()).getMethod("main", String[].class);
+        for (JsonNode value : argv) {
+            if (!value.isTextual()) throw new IllegalArgumentException("arguments must contain only JSON strings");
+            values.add(value.textValue());
+        }
+        var main = Class.forName(className.textValue(), true, getClass().getClassLoader()).getMethod("main", String[].class);
+        if (!java.lang.reflect.Modifier.isStatic(main.getModifiers()) || main.getReturnType() != void.class) {
+            throw new IllegalArgumentException("Entrypoint main must be public static void main(String[])");
+        }
         PrintStream diagnostics = System.out;
         PrintStream protocol = new PrintStream(session.output(), true, StandardCharsets.UTF_8);
         try {

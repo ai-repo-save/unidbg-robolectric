@@ -2,7 +2,7 @@
 
 ## 目标
 
-将现有 PoC 提供的 Android Java 环境桥接能力做成正式库。DroidGuard 与 TikTok 统一使用该库。交付只包含本地发行和验证，不推送或部署。
+将现有 PoC 提供的 Android Java 环境桥接能力做成正式库。DroidGuard 与 TikTok 统一使用该库。交付包含正式源码与本地制品验证。经用户授权，协调者向公开的 ai-repo-save/robolectric、ai-repo-save/unidbg-robolectric 及既有 unidbg 远端推送固定提交，供 CI 从 HTTPS 构建；不部署服务或发布容器。
 
 ## 执行边界
 
@@ -16,12 +16,13 @@
 
 ## 制品
 
-- fork 坐标：`io.github.ai-repo-save.unidbg:*:0.9.10`。正式修改 reactor 坐标和自依赖，保留 Java 包名与 native JNI 名称。
+- fork 坐标：`io.github.ai-repo-save.unidbg:*:0.10.0`。正式修改 reactor 坐标和自依赖，保留 Java 包名与 native JNI 名称；DvmClass/ProxyDvmClass 的正式 Jni 接口扩展承载 JDK Proxy 组合。
+- 唯一 Robolectric core：`io.github.ai-repo-save.robolectric:robolectric:1.0.0`，官方支持模块保持 4.17。在原 Package/进程绑定初始化处提供公开 package/process 配置，不编译替代 resource APK。UID 使用官方早期 lifecycle plugin。
 - 新库坐标：`io.github.ai-repo-save:unidbg-robolectric-{client,spi,worker}:1.0.0`。
 - client 负责进程生命周期与数据结果；SPI 负责工作进程内入口、资源、JNI 组合；worker 负责官方 Android 引导、环境投影和离线发行。
 - worker distribution 集中包含正式依赖、AndroidX AAR 的 classes.jar、预插桩 SDK、来源、许可证与摘要清单。运行时不下载 SDK。
 - 提供标准 Maven-layout 本地仓库与 worker distribution。Docker 显式接收本地制品 context，构建与运行均使用 JDK 21。
-- 远端 CI 必须获得同一发行制品后才能运行。当前只验证本地链路，不关闭 CI，不把本地通过等同远端可达。
+- 远端 CI 从公开仓库的固定提交构建正式制品，不依赖本机 Maven 缓存、私有 token 或大型二进制入 Git。不关闭 CI；远端源码可达与本地镜像验证分别记录。
 
 ## 公共合同
 
@@ -29,7 +30,7 @@
 
 `WorkerEntrypoint.run(WorkerSession, JsonNode)` 在工作 JVM 内执行整个任务。会话提供当前配置、资源登记、Android 上下文访问、通道与取消检查。资源逆序关闭，保留关闭异常；最终成功结果在资源和 Android teardown 完成后发布。
 
-通用 JNI 接线使用正式 ProxyClassFactory / ProxyDvmClass 扩展：观察器包围调用，按完整描述符注册的业务 handler 优先，普通 Android / Java 调用转 Proxy，未知业务调用明确失败。消费者移除反射修改 VM classMap / methodMap / jni 的接线。
+通用 JNI 接线使用正式 ProxyClassFactory / ProxyDvmClass 扩展：观察器包围调用，按完整描述符注册的业务 handler 优先，再使用明确注册的 business owner class-scoped delegate，显式 proxyOwner 的已知 Java 实现与普通 Android / Java 的公开接口和父类成员调用转 Proxy，未知业务调用明确失败。proxyOwner 必须能在当前工作类加载器加载，不要求消费者创建 ProxyClassLoader。owner delegate 不允许全局 catch-all 或覆盖 Android / Java 命名空间；它自行处理已知业务类的具体成员。acceptMethod / acceptField 元数据查询由组合层返回是否接受，不执行结果 handler。消费者移除反射修改 VM classMap / methodMap / jni 的接线。
 
 环境配置先覆盖实测基础能力和消费者实际需要的字段，不预造完整设备模型。Build、Settings、包、偏好及 native properties 的共同事实来自同一输入。guest 路径和宿主 Application 数据目录分别表示，通过明确映射共享文件。业务侧使用公开配置扩展接入其它服务；不得再定义同名 android.* 桩。
 

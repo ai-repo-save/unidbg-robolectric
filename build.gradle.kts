@@ -20,13 +20,18 @@ allprojects {
         providers.gradleProperty("unidbgRepository").orNull?.let { repository ->
             maven { url = uri(repository); content { includeGroup("io.github.ai-repo-save.unidbg") } }
         }
+        providers.gradleProperty("robolectricRepository").orNull?.let { repository ->
+            maven { url = uri(repository); content { includeGroup("io.github.ai-repo-save.robolectric") } }
+        }
         mavenLocal {
             content {
                 includeGroup("io.github.ai-repo-save.unidbg")
+                includeGroup("io.github.ai-repo-save.robolectric")
                 includeVersion("com.github.zhkl0228", "unicorn", "1.0.15")
                 includeVersion("com.github.zhkl0228", "capstone", "3.1.8")
                 includeVersion("com.github.zhkl0228", "keystone", "0.9.7")
                 includeVersion("com.github.zhkl0228", "demumble", "1.0.4")
+                includeVersion("org.robolectric", "android-all-instrumented", "11-robolectric-6757853-i7")
             }
         }
         mavenCentral()
@@ -42,6 +47,10 @@ subprojects {
         withSourcesJar()
         withJavadocJar()
     }
+    tasks.withType<AbstractArchiveTask>().configureEach {
+        isPreserveFileTimestamps = false
+        isReproducibleFileOrder = true
+    }
     extensions.configure<PublishingExtension> {
         publications.create<MavenPublication>("library") {
             from(components["java"])
@@ -49,6 +58,13 @@ subprojects {
             pom {
                 name = artifactId
                 description = "Isolated unidbg / Robolectric runtime"
+                url = "https://github.com/ai-repo-save/unidbg-robolectric"
+                scm {
+                    url = "https://github.com/ai-repo-save/unidbg-robolectric"
+                    connection = "scm:git:https://github.com/ai-repo-save/unidbg-robolectric.git"
+                    developerConnection = "scm:git:ssh://git@github.com/ai-repo-save/unidbg-robolectric.git"
+                    tag = providers.exec { commandLine("git", "rev-parse", "HEAD") }.standardOutput.asText.get().trim()
+                }
                 licenses { license { name = "Apache License, Version 2.0"; url = "https://www.apache.org/licenses/LICENSE-2.0" } }
             }
         }
@@ -65,7 +81,7 @@ abstract class AarClasses : TransformAction<TransformParameters.None> {
     override fun transform(outputs: TransformOutputs) {
         ZipFile(inputArtifact.get().asFile).use { archive ->
             archive.getInputStream(archive.getEntry("classes.jar")).use { input ->
-                outputs.file("classes.jar").outputStream().use { input.copyTo(it) }
+                outputs.file(inputArtifact.get().asFile.nameWithoutExtension + ".jar").outputStream().use { input.copyTo(it) }
             }
         }
     }
@@ -91,10 +107,12 @@ configurations.named(integration.runtimeClasspathConfigurationName) {
 
 dependencies {
     add(integration.implementationConfigurationName, "junit:junit:4.13.2")
-    add(integration.implementationConfigurationName, "org.robolectric:robolectric:4.17")
+    add(integration.implementationConfigurationName, project(":client"))
+    add(integration.implementationConfigurationName, project(":spi"))
+    add(integration.implementationConfigurationName, "io.github.ai-repo-save.robolectric:robolectric:1.0.0")
     add(integration.implementationConfigurationName, "org.robolectric:android-all:11-robolectric-6757853")
-    add(integration.implementationConfigurationName, "io.github.ai-repo-save.unidbg:unidbg-android:0.9.10")
-    add(integration.implementationConfigurationName, "io.github.ai-repo-save.unidbg:unidbg-unicorn2:0.9.10")
+    add(integration.implementationConfigurationName, "io.github.ai-repo-save.unidbg:unidbg-android:0.10.0")
+    add(integration.implementationConfigurationName, "io.github.ai-repo-save.unidbg:unidbg-unicorn2:0.10.0")
     add(integration.implementationConfigurationName, "org.slf4j:slf4j-api:2.0.20")
     add(integration.runtimeOnlyConfigurationName, "ch.qos.logback:logback-classic:1.5.18")
     add(integration.runtimeOnlyConfigurationName, "net.logstash.logback:logstash-logback-encoder:8.1")
@@ -108,16 +126,19 @@ tasks.wrapper {
 
 val runId = Instant.now().toString().replace(":", "-")
 tasks.register<Test>("jniIntegration") {
-    description = "Explicit ARM64 JNI / Robolectric integration, including two isolated sessions."
+    description = "Explicit runtime distribution integration: JNI, independent workers, native IO, failure and cancellation."
+    dependsOn(":worker:installDist")
     group = "verification"
     testClassesDirs = integration.output.classesDirs
     classpath = integration.runtimeClasspath
     useJUnit()
-    filter { includeTestsMatching("org.example.unidbg.RobolectricJniIntegrationTest") }
+    filter { includeTestsMatching("org.example.unidbg.RuntimeIntegrationTest") }
     outputs.upToDateWhen { false }
     reports.junitXml.outputLocation = layout.buildDirectory.dir("evidence/$runId/xml")
     reports.html.outputLocation = layout.buildDirectory.dir("evidence/$runId/html")
     systemProperty("integration.runId", runId)
+    systemProperty("integration.runtime", project(":worker").layout.buildDirectory.dir("install/unidbg-worker").get().asFile.absolutePath)
+    doFirst { systemProperty("integration.fixtureClasspath", integration.runtimeClasspath.asPath) }
     systemProperty("integration.evidenceDir", layout.buildDirectory.dir("evidence/$runId/artifacts").get().asFile.absolutePath)
     systemProperty("robolectric.dependency.repo.url", "https://repo.maven.apache.org/maven2")
     systemProperty("robolectric.dependency.proxy.host", "127.0.0.1")
@@ -135,3 +156,5 @@ tasks.register<Test>("jniIntegration") {
     )
     testLogging { events("passed", "failed", "standardOut", "standardError"); showExceptions = true; showStackTraces = true }
 }
+
+apply(from = "gradle/release.gradle.kts")
