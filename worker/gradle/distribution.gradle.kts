@@ -55,9 +55,3 @@ configure<org.gradle.api.distribution.DistributionContainer> {
 tasks.named("installDist") { dependsOn(prepareRuntime) }
 tasks.named("distZip") { dependsOn(prepareRuntime) }
 tasks.named("distTar") { dependsOn(prepareRuntime) }
-
-configure<PublishingExtension> {
-    publications.named<MavenPublication>("library") {
-        artifact(tasks.named<Zip>("distZip")) { classifier = "runtime" }
-    }
-}

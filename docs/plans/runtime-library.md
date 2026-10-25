@@ -21,7 +21,7 @@
 - 新库坐标：`io.github.ai-repo-save:unidbg-robolectric-{client,spi,worker}:1.0.0`。
 - client 负责进程生命周期与数据结果；SPI 负责工作进程内入口、资源、JNI 组合；worker 负责官方 Android 引导、环境投影和离线发行。
 - worker distribution 集中包含正式依赖、AndroidX AAR 的 classes.jar、预插桩 SDK、来源与许可证。manifest 记录版本、源码 Git 提交、坐标、JDK/API 与配置路径等构建事实。运行时不下载 SDK；依赖下载由 Gradle/Maven 及其自身机制负责。
-- 提供标准 Maven-layout 本地仓库与 worker distribution。Docker 显式接收本地制品 context，构建与运行均使用 JDK 21。
+- 提供标准 Maven-layout 本地仓库与一份 worker 安装。默认 releaseLocal 只发布必要 JAR 并安装，不将 runtime ZIP 绑定到 Maven publication；distZip/distTar 仅由使用者显式请求。Docker 显式接收本地制品 context，构建与运行均使用 JDK 21。
 - 远端 CI 从公开仓库的固定提交构建正式制品，不依赖本机 Maven 缓存、私有 token 或大型二进制入 Git。不关闭 CI；远端源码可达与本地镜像验证分别记录。
 
 ## 公共合同

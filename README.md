@@ -6,7 +6,7 @@
 
 - `io.github.ai-repo-save:unidbg-robolectric-client:1.0.0`：轻量进程启动、JSON 通道、结果和取消。
 - `io.github.ai-repo-save:unidbg-robolectric-spi:1.0.0`：工作入口、资源登记、JNI handler / owner delegate / observer。
-- `io.github.ai-repo-save:unidbg-robolectric-worker:1.0.0`：官方 Android 生命周期及完整离线 distribution，ZIP classifier 为 `runtime`。
+- `io.github.ai-repo-save:unidbg-robolectric-worker:1.0.0`：官方 Android 生命周期的工作入口 JAR。
 - 底座为 `io.github.ai-repo-save.unidbg:*:0.10.0`，保留原 Java 包和 native JNI 名称。
 - Robolectric core 为 `io.github.ai-repo-save.robolectric:robolectric:1.0.0`，其余官方支持模块为 4.17；Android 11 / API 30，SDK 为 `android-all-instrumented:11-robolectric-6757853-i7`。
 
@@ -54,7 +54,7 @@
 
 源码库为公开的 `https://github.com/ai-repo-save/unidbg-robolectric`。POM、runtime-manifest 与 release manifest 记录源码固定提交、Maven GAV 和依赖坐标。首次远端/CI 构建可通过 HTTPS 获取固定提交的三个公开源码仓库，不需要私有 token，不发布大型 SDK 二进制到 Git。
 
-干净提交下创建标准 Maven-layout 仓库和完整 worker ZIP：
+干净提交下创建标准 Maven-layout 仓库和一份 worker 安装：
 
 ```sh
 ./gradlew --offline --no-daemon \
@@ -63,7 +63,9 @@
   releaseLocal
 ```
 
-输出 `build/repository` 包含库的 Maven 制品及原坐标的两个 fork 制品；外部 fork 的 POM/module/provenance 保留原样。worker ZIP、安装目录及 manifest 来自同一源码版本。正式版本不可被重新覆盖；开发阶段安装重建须等待使用者退出，不维护运行池或镜像管理器。
+输出 `build/repository` 包含库的 JAR 制品及原坐标的两个 fork 制品；外部 fork 的 POM/module/provenance 保留原样。Maven publication 不绑定 worker 压缩包，`releaseLocal` 只发布 JAR 并生成一份安装。JAR、安装目录及 manifest 来自同一源码版本。正式版本不可被重新覆盖；开发阶段安装重建须等待使用者退出，不维护运行池或镜像管理器。
+
+需要压缩包时显式执行 `:worker:distZip` 或 `:worker:distTar`。
 
 Docker 可通过明确的 Maven-layout 和 offline distribution 命名 context 消费制品。运行镜像只需 JDK 21、可写的临时/会话目录，不需要 Gradle/Maven或联网下载 SDK。源码推送由发布协调者执行；此流程不部署服务或发布容器。
 
