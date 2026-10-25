@@ -17,6 +17,25 @@ import org.slf4j.LoggerFactory;
 /** JNI table indices follow the JNI specification, using the ARM64 jvalue layout. */
 final class Arm64Jni implements AutoCloseable {
     private static final Logger LOG = LoggerFactory.getLogger(Arm64Jni.class);
+    private static final int JNI_FIND_CLASS = 6;
+    private static final int JNI_EXCEPTION_OCCURRED = 15;
+    private static final int JNI_GET_OBJECT_CLASS = 31;
+    private static final int JNI_GET_METHOD_ID = 33;
+    private static final int JNI_CALL_OBJECT_METHOD_A = 36;
+    private static final int JNI_CALL_BOOLEAN_METHOD_A = 39;
+    private static final int JNI_GET_FIELD_ID = 94;
+    private static final int JNI_GET_OBJECT_FIELD = 95;
+    private static final int JNI_GET_STATIC_METHOD_ID = 113;
+    private static final int JNI_CALL_STATIC_OBJECT_METHOD_A = 116;
+    private static final int JNI_CALL_STATIC_BOOLEAN_METHOD_A = 119;
+    private static final int JNI_GET_STATIC_FIELD_ID = 144;
+    private static final int JNI_GET_STATIC_OBJECT_FIELD = 145;
+    private static final int POINTER_BYTES = Long.BYTES;
+    private static final int JVALUE_BYTES = Long.BYTES;
+    private static final int SCRATCH_SIZE = 4096;
+    private static final int NAME_OFFSET = 0;
+    private static final int DESCRIPTOR_OFFSET = 1024;
+    private static final int ARGUMENTS_OFFSET = 2048;
     private final AndroidEmulator emulator;
     private final VM vm;
     private final Pointer env;
@@ -31,7 +50,7 @@ final class Arm64Jni implements AutoCloseable {
             vm.setDvmClassFactory(new ProxyClassFactory(androidLoader));
             env = vm.getJNIEnv();
             table = env.getPointer(0);
-            scratch = emulator.getMemory().malloc(4096, true);
+            scratch = emulator.getMemory().malloc(SCRATCH_SIZE, true);
             LOG.info("event=emulator_started backend={} backendLoader={} androidLoader={} vmLoader={} "
                             + "unicornLoader={} androidAndVmLoaderSame={}",
                     emulator.getBackend().getClass().getName(), emulator.getBackend().getClass().getClassLoader(),
@@ -49,45 +68,54 @@ final class Arm64Jni implements AutoCloseable {
     }
 
     private int type(String name) {
-        scratch.getPointer().setString(0, name);
-        return invoke(6, env, scratch.getPointer());
+        Pointer namePointer = scratch.getPointer().share(NAME_OFFSET);
+        namePointer.setString(0, name);
+        return invoke(JNI_FIND_CLASS, env, namePointer);
     }
 
     private int member(int type, int index, String name, String descriptor) {
         Pointer data = scratch.getPointer();
-        data.setString(0, name);
-        data.setString(1024, descriptor);
-        return invoke(index, env, type, data, data.share(1024));
+        Pointer namePointer = data.share(NAME_OFFSET);
+        Pointer descriptorPointer = data.share(DESCRIPTOR_OFFSET);
+        namePointer.setString(0, name);
+        descriptorPointer.setString(0, descriptor);
+        return invoke(index, env, type, namePointer, descriptorPointer);
     }
 
     int objectCall(int receiver, String name, String descriptor, int... args) {
-        int type = invoke(31, env, receiver);
-        return invoke(36, env, receiver, member(type, 33, name, descriptor), arguments(args));
+        int type = invoke(JNI_GET_OBJECT_CLASS, env, receiver);
+        return invoke(JNI_CALL_OBJECT_METHOD_A, env, receiver,
+                member(type, JNI_GET_METHOD_ID, name, descriptor), arguments(args));
     }
 
     boolean booleanCall(int receiver, String name, String descriptor, int... args) {
-        int type = invoke(31, env, receiver);
-        return invoke(39, env, receiver, member(type, 33, name, descriptor), arguments(args)) == VM.JNI_TRUE;
+        int type = invoke(JNI_GET_OBJECT_CLASS, env, receiver);
+        return invoke(JNI_CALL_BOOLEAN_METHOD_A, env, receiver,
+                member(type, JNI_GET_METHOD_ID, name, descriptor), arguments(args)) == VM.JNI_TRUE;
     }
 
     int staticObjectCall(String typeName, String name, String descriptor, int... args) {
         int type = type(typeName);
-        return invoke(116, env, type, member(type, 113, name, descriptor), arguments(args));
+        return invoke(JNI_CALL_STATIC_OBJECT_METHOD_A, env, type,
+                member(type, JNI_GET_STATIC_METHOD_ID, name, descriptor), arguments(args));
     }
 
     boolean staticBooleanCall(String typeName, String name, String descriptor, int... args) {
         int type = type(typeName);
-        return invoke(119, env, type, member(type, 113, name, descriptor), arguments(args)) == VM.JNI_TRUE;
+        return invoke(JNI_CALL_STATIC_BOOLEAN_METHOD_A, env, type,
+                member(type, JNI_GET_STATIC_METHOD_ID, name, descriptor), arguments(args)) == VM.JNI_TRUE;
     }
 
     Object staticObjectField(String typeName, String name, String descriptor) {
         int type = type(typeName);
-        return value(invoke(145, env, type, member(type, 144, name, descriptor)));
+        return value(invoke(JNI_GET_STATIC_OBJECT_FIELD, env, type,
+                member(type, JNI_GET_STATIC_FIELD_ID, name, descriptor)));
     }
 
     Object objectField(int receiver, String name, String descriptor) {
-        int type = invoke(31, env, receiver);
-        return value(invoke(95, env, receiver, member(type, 94, name, descriptor)));
+        int type = invoke(JNI_GET_OBJECT_CLASS, env, receiver);
+        return value(invoke(JNI_GET_OBJECT_FIELD, env, receiver,
+                member(type, JNI_GET_FIELD_ID, name, descriptor)));
     }
 
     Object value(int reference) {
@@ -95,18 +123,18 @@ final class Arm64Jni implements AutoCloseable {
     }
 
     private Pointer arguments(int[] args) {
-        Pointer data = scratch.getPointer().share(2048);
+        Pointer data = scratch.getPointer().share(ARGUMENTS_OFFSET);
         for (int i = 0; i < args.length; i++) {
-            data.setLong(i * 8L, Integer.toUnsignedLong(args[i]));
+            data.setLong((long) i * JVALUE_BYTES, Integer.toUnsignedLong(args[i]));
         }
         return data;
     }
 
     private int invoke(int index, Object... args) {
         int result = Module.emulateFunction(emulator,
-                UnidbgPointer.nativeValue(table.getPointer(index * 8L)), args).intValue();
+                UnidbgPointer.nativeValue(table.getPointer((long) index * POINTER_BYTES)), args).intValue();
         int exception = Module.emulateFunction(emulator,
-                UnidbgPointer.nativeValue(table.getPointer(15 * 8L)), env).intValue();
+                UnidbgPointer.nativeValue(table.getPointer((long) JNI_EXCEPTION_OCCURRED * POINTER_BYTES)), env).intValue();
         if (exception != 0) {
             throw new AssertionError("JNI index " + index + " raised an exception", (Throwable) value(exception));
         }

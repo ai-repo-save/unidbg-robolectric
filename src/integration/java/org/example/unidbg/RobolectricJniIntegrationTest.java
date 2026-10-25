@@ -19,16 +19,24 @@ public class RobolectricJniIntegrationTest {
         LOG.info("event=integration_started");
         try {
             for (String session : new String[] {"first", "second"}) {
-                System.setProperty("integration.session", session);
-                Result result = JUnitCore.runClasses(AndroidSession.class);
-                for (Failure failure : result.getFailures()) {
-                    LOG.error("event=session_failed session={}", session, failure.getException());
+                MDC.put("session_id", session);
+                try {
+                    System.setProperty("integration.session", session);
+                    Result result = JUnitCore.runClasses(AndroidSession.class);
+                    if (!result.wasSuccessful()) {
+                        AssertionError failure = new AssertionError("Robolectric session " + session + " failed");
+                        for (Failure resultFailure : result.getFailures()) {
+                            failure.addSuppressed(resultFailure.getException());
+                        }
+                        throw failure;
+                    }
+                    assertEquals("Exactly one complete scenario must execute", 1, result.getRunCount());
+                } catch (RuntimeException | Error failure) {
+                    LOG.error("event=session_failed", failure);
+                    throw failure;
+                } finally {
+                    MDC.remove("session_id");
                 }
-                if (!result.wasSuccessful()) {
-                    throw new AssertionError("Robolectric session " + session + " failed",
-                            result.getFailures().getFirst().getException());
-                }
-                assertEquals("Exactly one complete scenario must execute", 1, result.getRunCount());
             }
             LOG.info("event=integration_completed sessions=2");
         } finally {

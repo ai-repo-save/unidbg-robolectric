@@ -42,6 +42,15 @@ public class AndroidSession {
         String session = System.getProperty("integration.session");
         MDC.put("run_id", System.getProperty("integration.runId"));
         MDC.put("session_id", session);
+        try {
+            verifyAndroidSession(session);
+        } finally {
+            LOG.info("event=session_closed");
+            MDC.clear();
+        }
+    }
+
+    private static void verifyAndroidSession(String session) throws Exception {
         Application application = RuntimeEnvironment.getApplication();
         LOG.info("event=session_started api={} applicationLoader={}", RuntimeEnvironment.getApiLevel(),
                 application.getClass().getClassLoader());
@@ -96,14 +105,8 @@ public class AndroidSession {
                     "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;", key, jni.wrap("unset"))));
             LOG.info("event=preferences_verified values={}", hostPreferences.getAll());
             preserveDataDirectory(application.getDataDir().toPath(), session);
-            logNativeMappings();
+            preserveNativeMappings(session);
             LOG.info("event=session_completed");
-        } catch (Exception | AssertionError failure) {
-            LOG.error("event=session_failed", failure);
-            throw failure;
-        } finally {
-            LOG.info("event=session_closed");
-            MDC.clear();
         }
     }
 
@@ -125,10 +128,22 @@ public class AndroidSession {
         }
     }
 
-    private static void logNativeMappings() throws Exception {
-        List<String> mappings = Files.readAllLines(Path.of("/proc/self/maps"));
-        LOG.info("event=native_mappings_observed unicorn={} robolectric={}",
-                mappings.stream().filter(mapping -> mapping.contains("libunicorn")).toList(),
-                mappings.stream().filter(mapping -> mapping.contains("robolectric-nativeruntime")).toList());
+    private static void preserveNativeMappings(String session) throws Exception {
+        String snapshot = Files.readString(Path.of("/proc/self/maps"));
+        Path evidence = Path.of(System.getProperty("integration.evidenceDir"), session, "proc-self-maps.txt");
+        Files.createDirectories(evidence.getParent());
+        Files.writeString(evidence, snapshot);
+        List<String> mappings = snapshot.lines().toList();
+        String abi = "linux/x86_64";
+        String unicornLibrary = System.mapLibraryName("unicorn");
+        String robolectricLibrary = System.mapLibraryName("robolectric-nativeruntime");
+        String robolectricResource = "/native/" + abi + "/" + robolectricLibrary;
+        LOG.info("event=native_mappings_observed snapshot={} entries={} hostArch={} abi={} "
+                        + "unicornLibrary={} unicornMatches={} robolectricLibrary={} robolectricResource={} "
+                        + "robolectricMatches={}",
+                evidence, mappings.size(), System.getProperty("os.arch"), abi,
+                unicornLibrary, mappings.stream().filter(mapping -> mapping.endsWith("/" + unicornLibrary)).toList(),
+                robolectricLibrary, AndroidSession.class.getResource(robolectricResource),
+                mappings.stream().filter(mapping -> mapping.endsWith("/" + robolectricLibrary)).toList());
     }
 }

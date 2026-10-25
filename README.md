@@ -12,11 +12,20 @@
 - Robolectric 的传递运行时依赖包含 `nativeruntime-dist-compat:1.0.19`（159144356 字节）。下载该 JAR 与加载其原生库是两个不同阶段；是否加载以本次进程映射为准。
 - 依赖缓存使用默认 `~/.gradle`；Robolectric SDK 使用其默认本地缓存。缓存和构建证据不入 Git。
 
-wrapper 固定校验和：`553c78f50dafcd54d65b9a444649057857469edf836431389695608536d6b746`。
+Gradle 9.5.0 发行 ZIP（`gradle-9.5.0-bin.zip`）的 SHA256 固定为 `553c78f50dafcd54d65b9a444649057857469edf836431389695608536d6b746`，校验对象不是 `gradle-wrapper.jar`。
 
 ## 显式运行
 
-先确保本机 HTTP 代理监听 `127.0.0.1:7891`。在本仓目录执行：
+先用 JDK 21 将上述 unidbg 源码的全模块产物安装到本地 Maven，保留 Javadoc 构建，跳过业务测试和 GPG 签名：
+
+```sh
+(
+  cd "$HOME/git/unidbg"
+  JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ./mvnw -B -DskipTests -Dgpg.skip=true install
+)
+```
+
+再确保本机 HTTP 代理监听 `127.0.0.1:7891`。在本仓目录执行：
 
 ```sh
 ./gradlew \
@@ -43,13 +52,13 @@ wrapper 固定校验和：`553c78f50dafcd54d65b9a444649057857469edf8364313896956
 4. 公开 `ShadowPackageManager.installPackage` 安装 `PackageInfo`，JNI 经 Context、PackageManager、`getPackageInfo` 和字段读取取得包名及版本。
 5. JNI 执行 `SharedPreferences.edit/putString/commit`，通过独立创建的 package context 读取完整键值映射。
 6. 从公开 `Application.getDataDir()` 枚举并复制真实文件，记录路径、大小和 SHA-256。此步骤不访问 SharedPreferences 私有字段，也不推测其文件格式。
-7. 记录 Unicorn2、Robolectric nativeruntime 的宿主库映射与 Android / unidbg 类加载器归属，关闭临时内存和 emulator。
+7. 保存完整 `/proc/self/maps` 快照，记录当前 Linux x86-64 ABI 的库文件名、公开 `getResource` URL、映射匹配结果和 Android / unidbg 类加载器归属，关闭临时内存和 emulator。
 
-两次会话使用相同设置键、偏好文件名和包名，分别写入 `first`、`second` 值。初始状态断言和第二次精确值断言共同验证隔离；不同进程不是隔离手段。
+两次会话使用相同设置键、偏好文件名和包名，分别写入 `first`、`second` 值。初始状态断言和第二次精确值断言验证 `Settings.Global/Secure` 与 `SharedPreferences` 的会话隔离；不同进程不是隔离手段。`Build.MODEL` 和 PackageManager 仅验证逐会话配置后经 JNI 读回，未独立验证它们的自动 reset。
 
 ## 运行证据
 
-每次任务将 JUnit XML、HTML 和应用数据副本保存到独立 `build/evidence/<UTC 时间>/`。Logback 输出 JSON，包含时间、级别、事件、运行标识和会话标识，由 Gradle 写入 XML 测试输出。异常保留堆栈，资源通过 `try` / `finally` 和 `AutoCloseable` 清理。
+每次任务将 JUnit XML、HTML、应用数据副本和每个会话的 `proc-self-maps.txt` 完整快照保存到独立 `build/evidence/<UTC 时间>/`。Logback 输出 JSON，包含时间、级别、事件、运行标识和会话标识，由 Gradle 写入 XML 测试输出。外层 JUnit 会话边界统一记录失败堆栈，包括 runner 引导失败；资源通过 `try` / `finally` 和 `AutoCloseable` 清理。
 
 证据默认保留至显式 `./gradlew clean`。需要长期保存时，应在清理前归档整个运行目录。Gradle 的普通控制台输出不会自动写文件，可由调用方重定向保存。
 
@@ -62,12 +71,14 @@ JDK 21.0.12.1、Gradle 9.5.0 下，`jniIntegration` 通过：1 项整体测试�
 - 偏好完整映射分别为 `{unidbg_probe=preference-first}`、`{unidbg_probe=preference-second}`。独立读取保存的文件确认各自包含对应值，文件大小分别为 128、129 字节。
 - 两次会话初始 Settings 值均为 null，初始偏好值均为 `unset`，应用数据目录不同。
 - Android、DalvikVM64、Unicorn2Backend 和 Unicorn2 JNI 类由同一个 `SdkSandboxClassLoader` 加载，两次会话复用该加载器。
-- 实际后端为 `Unicorn2Backend`，两次会话映射同一份 native-lib-loader 解压的 `libunicorn.so`；进程映射中未出现 Robolectric nativeruntime 库。
+- 实际后端为 `Unicorn2Backend`，两次会话快照均匹配同一份 native-lib-loader 解压的 `libunicorn.so`。API 30 对应资源为 `native/linux/x86_64/librobolectric-nativeruntime.so`，公开资源查询能定位该 JAR 条目，快照中匹配该库文件名的映射为空。
 - 两次会话均记录 `emulator_closed` 和 `session_closed`，JUnit XML 持久化全部 JSON 日志。
 
 ## 验证边界
 
-验证对象是跨 JNI 的真实 Android 对象操作、宿主可观察结果、文件副作用和连续会话隔离。Robolectric 提供宿主 JVM 上的 Android 框架行为；此流程不是设备上的 ART、Binder 服务、系统 Settings 数据库或完整 Android 系统。
+验证对象是跨 JNI 的真实 Android 对象操作、宿主可观察结果、文件副作用和 Settings / SharedPreferences 的连续会话隔离。Robolectric 提供宿主 JVM 上的 Android 框架行为；此流程不是设备上的 ART、Binder 服务、系统 Settings 数据库或完整 Android 系统。
+
+native 证据只记录四类 API 操作后的被动快照，不主动加载 Robolectric 原生库，也不证明 Unicorn2 与 Robolectric 原生库共存。API 30 使用官方 loader 的 `robolectric-nativeruntime` 库名，匹配依据是当前发行包中的实际文件名。
 
 Unicorn2 执行的是 JNI 表函数 trampoline，不是业务 `.so`。未验证 APK 加载、第三方 ARM64 库、Android 原生图形、真实设备、其他 SDK、其他 sandbox、Android 与 unidbg 分属不同类加载器、其他 CPU 架构、并发会话或长驻服务。文件副本用于独立检查落盘证据，不据此声称跨 JVM 重启后的 SharedPreferences 恢复能力。本次未注入运行中故障；失败时的资源清理由 `try` / `finally` 和 `AutoCloseable` 保证。
 
