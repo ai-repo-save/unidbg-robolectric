@@ -42,6 +42,6 @@ public final class RuntimeClient {
         command.add(input.toString());
         Process process = new ProcessBuilder(command).directory(request.workingDirectory().toFile())
                 .redirectError(output.resolve("logs/stderr.log").toFile()).start();
-        return new SessionHandle(process, request, output);
+        return new SessionHandle(process, request, output, id);
     }
 }

@@ -47,20 +47,31 @@ public final class RuntimeFixture implements WorkerEntrypoint {
             case "native" -> JSON.createObjectNode().put("android", session.androidEnabled()).put("pid", ProcessHandle.current().pid());
             case "fail" -> throw new java.io.IOException("Integration fixture failure");
             case "service" -> service(session);
-            case "cooperative" -> {
-                BlockingChild.signalReady(session.outputDirectory().resolve("ready"));
+            case "cooperative", "cooperative-child" -> {
+                if (operation.equals("cooperative-child")) startChild(session, arguments);
+                else BlockingChild.signalReady(session.outputDirectory().resolve("ready"));
                 while (true) { session.checkCancelled(); Thread.sleep(10); }
             }
             case "blocked" -> {
-                Process child = new ProcessBuilder(Path.of(System.getProperty("java.home"), "bin/java").toString(),
-                        "-cp", arguments.required("childClasspath").asText(), BlockingChild.class.getName(),
-                        session.outputDirectory().resolve("ready").toString()).start();
-                Files.writeString(session.outputDirectory().resolve("child.pid"), Long.toString(child.pid()));
+                startChild(session, arguments);
                 Thread.sleep(Long.MAX_VALUE);
                 throw new AssertionError("Blocked fixture unexpectedly returned");
             }
             default -> throw new IllegalArgumentException(operation);
         };
+    }
+
+    private static void startChild(WorkerSession session, JsonNode arguments) throws Exception {
+        Path childReady = session.outputDirectory().resolve("child-ready");
+        Process child = new ProcessBuilder(Path.of(System.getProperty("java.home"), "bin/java").toString(),
+                "-cp", arguments.required("childClasspath").asText(), BlockingChild.class.getName(), childReady.toString()).start();
+        Files.writeString(session.outputDirectory().resolve("child.pid"), Long.toString(child.pid()));
+        while (!Files.isRegularFile(childReady)) {
+            if (!child.isAlive()) throw new java.io.IOException("Child exited before signalling readiness: " + child.exitValue());
+            session.checkCancelled();
+            Thread.sleep(10);
+        }
+        BlockingChild.signalReady(session.outputDirectory().resolve("ready"));
     }
 
     private static JsonNode service(WorkerSession session) throws Exception {

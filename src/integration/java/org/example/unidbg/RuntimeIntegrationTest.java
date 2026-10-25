@@ -56,15 +56,17 @@ public final class RuntimeIntegrationTest {
             assertEquals(2, complete(handle).payload().required("count").intValue());
             assertClosed(handle);
         }
-        for (String operation : new String[] {"cooperative", "blocked"}) {
+        for (String operation : new String[] {"cooperative", "cooperative-child", "blocked"}) {
             try (SessionHandle handle = client.start(request(operation, RunRequest.Mode.NATIVE_ONLY, nativeRuntime))) {
                 awaitFile(handle.outputDirectory().resolve("ready"));
-                long child = operation.equals("blocked") ? Long.parseLong(Files.readString(handle.outputDirectory().resolve("child.pid"))) : 0;
+                long child = operation.equals("cooperative") ? 0 : Long.parseLong(Files.readString(handle.outputDirectory().resolve("child.pid")));
                 handle.cancel();
-                assertEquals(RunResult.Status.CANCELLED, complete(handle).status());
+                RunResult result = complete(handle);
+                assertEquals(RunResult.Status.CANCELLED, result.status());
+                if (operation.equals("cooperative-child")) assertEquals(130, result.exitCode());
                 assertEquals(false, ProcessHandle.of(handle.pid()).map(ProcessHandle::isAlive).orElse(false));
                 if (child != 0) assertEquals(false, ProcessHandle.of(child).map(ProcessHandle::isAlive).orElse(false));
-                else assertClosed(handle);
+                if (!operation.equals("blocked")) assertClosed(handle);
             }
         }
     }

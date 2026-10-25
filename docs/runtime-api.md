@@ -86,4 +86,4 @@ bin/unidbg-worker --mode ANDROID --entrypoint com.example.Task \
 
 JUnit5 适配由消费者实现 WorkerEntrypoint，并在 run 内调用官方 JUnit Platform Launcher、执行原 selectors/参数扩展并写真实 XML。不要把 native 对象返回父 Gradle Test，或把业务工作交给库内部 JUnit4 bootstrap 作正确性断言。
 
-持久入口在 run 中处理完整 stdin/stdout 协议，直到 close / EOF 才返回；无默认空闲超时。每次 send/receive 传 JSON，原始诊断不进入机器通道。client 的取消预算先等待 cancellationGrace 协作关闭，再分别给 TERM 和必要的 KILL 一个 terminationWait；回收整个已启动子树。强制终止记录 finallyConfirmed=false，不声称已运行 JVM finally。MCP 服务也必须在此作用域内创建和关闭。
+持久入口在 run 中处理完整 stdin/stdout 协议，直到 close / EOF 才返回；无默认空闲超时。每次 send/receive 传 JSON，原始诊断不进入机器通道。client 在发送取消信号前捕获已启动子树；cancellationGrace 内根进程退出后仍保留子进程句柄，继续回收存活后代。取消预算先等待协作关闭，再分别给 TERM 和必要的 KILL 一个 terminationWait。completion 在取消清理完成后才报告终态。SLF4J 事件关联 trace/session、PID、阶段、预算和等待结果；cancellation.json 保存完整摘要，有进程信号时 aborted.json 保存同一摘要。finallyConfirmed=false，不将 TERM/KILL 等同于已运行 JVM finally。MCP 服务也必须在此作用域内创建和关闭。
