@@ -44,7 +44,7 @@ public final class DeviceServicesIntegrationTest {
                   "services": {
                     "systemFeatures": {"org.example.feature.present": true, "org.example.feature.absent": false},
                     "display": {
-                      "name": "Configured display", "flags": 3, "state": 3,
+                      "name": "Configured display", "flags": 3, "type": 1, "state": 3,
                       "width": 700, "height": 900, "realWidth": 720, "realHeight": 960,
                       "densityDpi": 320, "xdpi": 321.5, "ydpi": 322.5, "rotation": 1,
                       "mode": {"physicalWidth": 800, "physicalHeight": 1000, "refreshRate": 75.0}
@@ -96,6 +96,7 @@ public final class DeviceServicesIntegrationTest {
                     .filter(item -> item.getDisplayId() == Display.DEFAULT_DISPLAY).findFirst().orElseThrow();
             assertEquals("Configured display", display.getName());
             assertEquals(3, display.getFlags());
+            assertEquals(Display.TYPE_INTERNAL, display.getType());
             assertEquals(Display.STATE_DOZE, display.getState());
             assertEquals(1, display.getRotation());
             DisplayMetrics metrics = new DisplayMetrics();

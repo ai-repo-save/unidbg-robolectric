@@ -41,7 +41,7 @@ final class DeviceServicesProjection {
     }
 
     private static void display(Application application, JsonNode configuration) {
-        object(configuration, "services.display", Set.of("name", "flags", "state", "width", "height",
+        object(configuration, "services.display", Set.of("name", "flags", "type", "state", "width", "height",
                 "realWidth", "realHeight", "densityDpi", "xdpi", "ydpi", "rotation", "mode"));
         DisplayManager manager = (DisplayManager) application.getSystemService(Context.DISPLAY_SERVICE);
         Display display = manager.getDisplay(Display.DEFAULT_DISPLAY);
@@ -53,6 +53,7 @@ final class DeviceServicesProjection {
             switch (field) {
                 case "name" -> shadow.setName(ProfileValues.text(value, path));
                 case "flags" -> shadow.setFlags(integer(value, path));
+                case "type" -> shadow.setType(integer(value, path));
                 case "state" -> shadow.setState(integer(value, path));
                 case "width" -> shadow.setWidth(integer(value, path));
                 case "height" -> shadow.setHeight(integer(value, path));

@@ -1,6 +1,6 @@
 # 设备服务 Profile
 
-Android 模式通过可选的 `profile.services` 配置框架服务。`RuntimeApplication` 初始化后，`ProfileProjection` 在调用工作入口之前应用配置。输入来自调用方；库通过 Robolectric 4.17 公开 API 投影，不预置设备采集值。
+Android 模式通过可选的 `profile.services` 配置框架服务。`RuntimeApplication` 初始化后，`ProfileProjection` 在调用工作入口之前应用配置。输入来自调用方；库通过基于 Robolectric 4.17 的 fork 公开 API 投影，不预置设备采集值。
 
 `services` 是 JSON 对象，支持 `systemFeatures`、`display`、`sensors`。省略 `services` 或其中一项时保留对应框架初始状态。所有配置对象拒绝未知字段；`systemFeatures` 的键是调用方提供的功能名称。字段值拒绝 `null` 和类型转换。整数要求有符号 32 位 JSON 整数；浮点数要求能表示为有限 `float` 的 JSON 数字。
 
@@ -18,6 +18,7 @@ Android 模式通过可选的 `profile.services` 配置框架服务。`RuntimeAp
 | --- | --- | --- |
 | `name` | string | `ShadowDisplay.setName` |
 | `flags` | integer | `ShadowDisplay.setFlags` |
+| `type` | integer | `ShadowDisplay.setType` |
 | `state` | integer | `ShadowDisplay.setState` |
 | `width` | integer | `ShadowDisplay.setWidth` |
 | `height` | integer | `ShadowDisplay.setHeight` |
@@ -29,7 +30,7 @@ Android 模式通过可选的 `profile.services` 配置框架服务。`RuntimeAp
 | `rotation` | integer | `ShadowDisplay.setRotation` |
 | `mode` | object | `ShadowDisplayManager.ModeBuilder`、`setSupportedModes` |
 
-`width`、`height` 是应用可用像素尺寸。`realWidth`、`realHeight` 是 real metrics 的像素尺寸。`densityDpi`、`xdpi`、`ydpi` 的单位是 DPI。`state`、`rotation`、`flags` 使用 Android 对应常量的整数值。
+`width`、`height` 是应用可用像素尺寸。`realWidth`、`realHeight` 是 real metrics 的像素尺寸。`densityDpi`、`xdpi`、`ydpi` 的单位是 DPI。`type`、`state`、`rotation`、`flags` 使用 Android 对应常量的整数值。`type` 使用 fork `shadows-framework:1.2.0` 新增的公开设置 API，由同版本 core 正式依赖；设置会同步当前显示对象和后续显示对象的框架配置。
 
 提供 `mode` 时，必须同时提供以下三个字段：
 
@@ -41,7 +42,7 @@ Android 模式通过可选的 `profile.services` 配置框架服务。`RuntimeAp
 
 库保留当前模式 ID，将支持的模式替换为该单一模式。模式物理尺寸与 real metrics 独立配置；调用方分别提供采集值。
 
-当前投影只配置默认显示。`type`、显示数量、多模式清单、HDR 和 cutout 不属于该 schema。`ShadowDisplay` 没有公开的类型设置 API，库保留框架初始显示类型。
+当前投影只配置默认显示。显示数量、多模式清单、HDR 和 cutout 不属于该 schema。省略 `type` 时保留框架初始显示类型。
 
 API 30 的 `Application` 是非 visual Context；调用 `Application.getDisplay()` 抛出异常符合 Android 合同。消费者通过 `DisplayManager.getDisplays()` 或 `getDisplay(id)` 查询显示。
 
