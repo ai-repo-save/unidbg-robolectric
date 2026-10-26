@@ -4,10 +4,10 @@
 
 ## 公共制品
 
-- `io.github.ai-repo-save:unidbg-robolectric-client:1.2.0`：轻量进程启动、JSON 通道、结果和取消。
-- `io.github.ai-repo-save:unidbg-robolectric-spi:1.2.0`：工作入口、资源登记、JNI handler / owner delegate / observer。
-- `io.github.ai-repo-save:unidbg-robolectric-worker:1.2.0`：官方 Android 生命周期的工作入口 JAR。
-- 底座为 `io.github.ai-repo-save.unidbg:*:0.13.0`，保留原 Java 包和 native JNI 名称。
+- `io.github.ai-repo-save:unidbg-robolectric-client:1.2.1`：轻量进程启动、JSON 通道、结果和取消。
+- `io.github.ai-repo-save:unidbg-robolectric-spi:1.2.1`：工作入口、资源登记、JNI handler / owner delegate / observer。
+- `io.github.ai-repo-save:unidbg-robolectric-worker:1.2.1`：官方 Android 生命周期的工作入口 JAR。
+- 底座为 `io.github.ai-repo-save.unidbg:*:0.13.1`，保留原 Java 包和 native JNI 名称。
 - Robolectric core 为 `io.github.ai-repo-save.robolectric:robolectric:1.2.0`，正式传递依赖完整 `io.github.ai-repo-save.robolectric:shadows-framework:1.2.0`，替代官方同名框架制品；其余官方支持模块为 4.17。Android 11 / API 30，SDK 为 `android-all-instrumented:11-robolectric-6757853-i7`。
 
 支持 Linux x86-64、ARM64 Unicorn2。native resolver API、rootfs、自定义 emulator/syscall、有序 ELF 装载、post-map hooks、JNI_OnLoad 和业务回调由工作入口决定。native-only 不初始化 Robolectric，也不要求预插桩 SDK 目录。
@@ -16,14 +16,15 @@
 
 ## 构建与安装
 
-先准备经过独立审查的正式依赖，所有构建使用 JDK 21。unidbg 仓库为 `https://github.com/ai-repo-save/unidbg`，要求 `0.13.0`，固定源码提交由其 `target/release-0.13.0/release-manifest.json` 记录。从该提交的干净源码运行正式发行脚本：
+先准备经过独立审查的正式依赖，所有构建使用 JDK 21。unidbg 仓库为 `https://github.com/ai-repo-save/unidbg`，要求 `0.13.1`，固定源码提交由其 `target/release-0.13.1/release-manifest.json` 记录。从该提交的干净源码运行正式发行脚本：
 
 ```sh
 (
   cd "$HOME/git/unidbg"
   uv run --script scripts/release.py \
     --baseline 129151171590d0cfaaf46f98f93f1ac5f97fc401 \
-    --java-home /usr/lib/jvm/java-21-openjdk-amd64
+    --java-home /usr/lib/jvm/java-21-openjdk-amd64 \
+    --repository "$HOME/git/unidbg/target/release-0.13.1"
 )
 ```
 
@@ -70,7 +71,7 @@ uv run --script scripts/release-local.py \
   releaseLocal
 ```
 
-`validateRelease` 检查干净源码、unidbg 0.13.0 的正式 release receipt 与所需 POM/JAR，以及 Robolectric core/framework 1.2.0 各自的 POM/module/JAR/provenance。输出 `build/repository` 包含库的 JAR 制品、原坐标的 unidbg fork，以及 Robolectric core 和完整 framework 两个 fork 制品；外部 fork 的 POM/module/provenance 保留原样，release manifest 显式列出两个 Robolectric 坐标。Maven publication 不绑定 worker 压缩包，`releaseLocal` 只发布 JAR 并生成一份安装。JAR、安装目录及 manifest 来自同一源码版本。正式版本不可被重新覆盖；开发阶段安装重建须等待使用者退出，不维护运行池或镜像管理器。
+`validateRelease` 检查干净源码、unidbg 0.13.1 的正式 release receipt 与所需 POM/JAR，以及 Robolectric core/framework 1.2.0 各自的 POM/module/JAR/provenance。输出 `build/repository` 包含库的 JAR 制品、原坐标的 unidbg fork，以及 Robolectric core 和完整 framework 两个 fork 制品；外部 fork 的 POM/module/provenance 保留原样，release manifest 显式列出两个 Robolectric 坐标。Maven publication 不绑定 worker 压缩包，`releaseLocal` 只发布 JAR 并生成一份安装。JAR、安装目录及 manifest 来自同一源码版本。正式版本不可被重新覆盖；开发阶段安装重建须等待使用者退出，不维护运行池或镜像管理器。
 
 本机 Maven 安装在同次发行授权下另行执行 `./gradlew --offline --no-daemon publishToMavenLocal`。需要压缩包时显式执行 `:worker:distZip` 或 `:worker:distTar`。
 

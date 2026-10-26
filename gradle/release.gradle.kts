@@ -8,11 +8,11 @@ val validateRelease = tasks.register("validateRelease") {
         check(providers.gradleProperty("unidbgRepository").isPresent) { "Pass -PunidbgRepository=<stable fork Maven repository>" }
         check(providers.gradleProperty("robolectricRepository").isPresent) { "Pass -ProbolectricRepository=<stable core/framework Maven repository>" }
         val unidbgRepository = file(providers.gradleProperty("unidbgRepository").get())
-        check(unidbgRepository.resolve("release-manifest.json").isFile) { "Stable unidbg 0.13.0 release receipt is missing" }
+        check(unidbgRepository.resolve("release-manifest.json").isFile) { "Stable unidbg 0.13.1 release receipt is missing" }
         for (artifact in listOf("unidbg-api", "unidbg-android", "unidbg-unicorn2")) {
             for (extension in listOf("pom", "jar")) {
-                check(unidbgRepository.resolve("io/github/ai-repo-save/unidbg/$artifact/0.13.0/$artifact-0.13.0.$extension").isFile) {
-                    "Stable unidbg 0.13.0 repository is incomplete: $artifact ($extension)"
+                check(unidbgRepository.resolve("io/github/ai-repo-save/unidbg/$artifact/0.13.1/$artifact-0.13.1.$extension").isFile) {
+                    "Stable unidbg 0.13.1 repository is incomplete: $artifact ($extension)"
                 }
             }
         }
@@ -49,7 +49,7 @@ val writeReleaseManifest = tasks.register("writeReleaseManifest") {
             "version" to releaseVersion, "sourceRepository" to "https://github.com/ai-repo-save/unidbg-robolectric",
             "sourceCommit" to commit,
             "coordinates" to listOf("client", "spi", "worker").map { "io.github.ai-repo-save:unidbg-robolectric-$it:$releaseVersion" },
-            "dependencyCoordinates" to listOf("io.github.ai-repo-save.unidbg:*:0.13.0",
+            "dependencyCoordinates" to listOf("io.github.ai-repo-save.unidbg:*:0.13.1",
                 "io.github.ai-repo-save.robolectric:robolectric:1.2.0",
                 "io.github.ai-repo-save.robolectric:shadows-framework:1.2.0")
         ))))
