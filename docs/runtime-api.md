@@ -1,6 +1,6 @@
-# Runtime 1.1.0 公共合同
+# Runtime 1.2.0 公共合同
 
-坐标为 `io.github.ai-repo-save:unidbg-robolectric-{client,spi,worker}:1.1.0`，JDK 21。业务实现依赖 SPI；父进程仅依赖 client。worker distribution 提供执行环境与离线 API 30 SDK。底座为 `io.github.ai-repo-save.unidbg:*:0.12.0`；唯一 Robolectric core 为 `io.github.ai-repo-save.robolectric:robolectric:1.1.0`，复用官方支持模块 4.17。
+坐标为 `io.github.ai-repo-save:unidbg-robolectric-{client,spi,worker}:1.2.0`，JDK 21。业务实现依赖 SPI；父进程仅依赖 client。worker distribution 提供执行环境与离线 API 30 SDK。底座为 `io.github.ai-repo-save.unidbg:*:0.13.0`；唯一 Robolectric core 为 `io.github.ai-repo-save.robolectric:robolectric:1.2.0`，正式传递依赖完整 `io.github.ai-repo-save.robolectric:shadows-framework:1.2.0`，替代官方同名 framework；其他官方支持模块保持 4.17。
 
 ## 工作入口
 

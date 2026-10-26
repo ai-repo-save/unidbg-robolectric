@@ -1,6 +1,6 @@
 # 包 Profile
 
-Runtime 1.1.0 的 Android 模式通过 `profile.package` 配置唯一宿主，通过可选的 `profile.packages` 数组配置附加已安装包。每项必须提供非空 `name` 或用于派生包名的 `apk`。附加包名必须唯一，与宿主重名时拒绝启动。
+Runtime 1.2.0 的 Android 模式通过 `profile.package` 配置唯一宿主，通过可选的 `profile.packages` 数组配置附加已安装包。每项必须提供非空 `name` 或用于派生包名的 `apk`。附加包名必须唯一，与宿主重名时拒绝启动。
 
 库在 Android 引导前解析 APK，将结果写入 `effective-request.json`。`RuntimeApplication.onCreate()` 在工作入口启动前投影宿主与附加包。宿主保留框架创建的 `ApplicationInfo`；附加包使用独立的 `PackageInfo` 和 `ApplicationInfo`，统一通过公开的 `ShadowPackageManager.installPackage` 安装。`android` 包也由调用方在清单中显式配置。
 

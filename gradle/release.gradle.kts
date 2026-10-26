@@ -6,9 +6,24 @@ val validateRelease = tasks.register("validateRelease") {
         val status = providers.exec { commandLine("git", "status", "--porcelain") }.standardOutput.asText.get()
         check(status.isBlank()) { "Formal release requires a clean source checkout" }
         check(providers.gradleProperty("unidbgRepository").isPresent) { "Pass -PunidbgRepository=<stable fork Maven repository>" }
-        check(providers.gradleProperty("robolectricRepository").isPresent) { "Pass -ProbolectricRepository=<stable core Maven repository>" }
-        check(file(providers.gradleProperty("unidbgRepository").get()).resolve("io/github/ai-repo-save/unidbg/unidbg-android/0.12.0/unidbg-android-0.12.0.pom").isFile) { "Stable unidbg 0.12.0 repository is incomplete" }
-        check(file(providers.gradleProperty("robolectricRepository").get()).resolve("io/github/ai-repo-save/robolectric/robolectric/1.1.0/robolectric-1.1.0.provenance.json").isFile) { "Stable Robolectric core repository/provenance is incomplete" }
+        check(providers.gradleProperty("robolectricRepository").isPresent) { "Pass -ProbolectricRepository=<stable core/framework Maven repository>" }
+        val unidbgRepository = file(providers.gradleProperty("unidbgRepository").get())
+        check(unidbgRepository.resolve("release-manifest.json").isFile) { "Stable unidbg 0.13.0 release receipt is missing" }
+        for (artifact in listOf("unidbg-api", "unidbg-android", "unidbg-unicorn2")) {
+            for (extension in listOf("pom", "jar")) {
+                check(unidbgRepository.resolve("io/github/ai-repo-save/unidbg/$artifact/0.13.0/$artifact-0.13.0.$extension").isFile) {
+                    "Stable unidbg 0.13.0 repository is incomplete: $artifact ($extension)"
+                }
+            }
+        }
+        val robolectricRepository = file(providers.gradleProperty("robolectricRepository").get())
+        for (artifact in listOf("robolectric", "shadows-framework")) {
+            for (extension in listOf("pom", "module", "jar", "provenance.json")) {
+                check(robolectricRepository.resolve("io/github/ai-repo-save/robolectric/$artifact/1.2.0/$artifact-1.2.0.$extension").isFile) {
+                    "Stable Robolectric 1.2.0 repository/provenance is incomplete: $artifact ($extension)"
+                }
+            }
+        }
     }
 }
 val stageUnidbg = tasks.register<Copy>("stageUnidbgRelease") {
@@ -34,7 +49,9 @@ val writeReleaseManifest = tasks.register("writeReleaseManifest") {
             "version" to releaseVersion, "sourceRepository" to "https://github.com/ai-repo-save/unidbg-robolectric",
             "sourceCommit" to commit,
             "coordinates" to listOf("client", "spi", "worker").map { "io.github.ai-repo-save:unidbg-robolectric-$it:$releaseVersion" },
-            "dependencyCoordinates" to listOf("io.github.ai-repo-save.unidbg:*:0.12.0", "io.github.ai-repo-save.robolectric:robolectric:1.1.0")
+            "dependencyCoordinates" to listOf("io.github.ai-repo-save.unidbg:*:0.13.0",
+                "io.github.ai-repo-save.robolectric:robolectric:1.2.0",
+                "io.github.ai-repo-save.robolectric:shadows-framework:1.2.0")
         ))))
     }
 }
