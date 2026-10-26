@@ -7,7 +7,7 @@ val validateRelease = tasks.register("validateRelease") {
         check(status.isBlank()) { "Formal release requires a clean source checkout" }
         check(providers.gradleProperty("unidbgRepository").isPresent) { "Pass -PunidbgRepository=<stable fork Maven repository>" }
         check(providers.gradleProperty("robolectricRepository").isPresent) { "Pass -ProbolectricRepository=<stable core Maven repository>" }
-        check(file(providers.gradleProperty("unidbgRepository").get()).resolve("io/github/ai-repo-save/unidbg/unidbg-android/0.10.0/unidbg-android-0.10.0.pom").isFile) { "Stable unidbg 0.10.0 repository is incomplete" }
+        check(file(providers.gradleProperty("unidbgRepository").get()).resolve("io/github/ai-repo-save/unidbg/unidbg-android/0.10.1/unidbg-android-0.10.1.pom").isFile) { "Stable unidbg 0.10.1 repository is incomplete" }
         check(file(providers.gradleProperty("robolectricRepository").get()).resolve("io/github/ai-repo-save/robolectric/robolectric/1.0.0/robolectric-1.0.0.provenance.json").isFile) { "Stable Robolectric core repository/provenance is incomplete" }
     }
 }
@@ -34,7 +34,7 @@ val writeReleaseManifest = tasks.register("writeReleaseManifest") {
             "version" to releaseVersion, "sourceRepository" to "https://github.com/ai-repo-save/unidbg-robolectric",
             "sourceCommit" to commit,
             "coordinates" to listOf("client", "spi", "worker").map { "io.github.ai-repo-save:unidbg-robolectric-$it:$releaseVersion" },
-            "dependencyCoordinates" to listOf("io.github.ai-repo-save.unidbg:*:0.10.0", "io.github.ai-repo-save.robolectric:robolectric:1.0.0")
+            "dependencyCoordinates" to listOf("io.github.ai-repo-save.unidbg:*:0.10.1", "io.github.ai-repo-save.robolectric:robolectric:1.0.0")
         ))))
     }
 }

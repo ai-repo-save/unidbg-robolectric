@@ -4,10 +4,10 @@
 
 ## 公共制品
 
-- `io.github.ai-repo-save:unidbg-robolectric-client:1.0.0`：轻量进程启动、JSON 通道、结果和取消。
-- `io.github.ai-repo-save:unidbg-robolectric-spi:1.0.0`：工作入口、资源登记、JNI handler / owner delegate / observer。
-- `io.github.ai-repo-save:unidbg-robolectric-worker:1.0.0`：官方 Android 生命周期的工作入口 JAR。
-- 底座为 `io.github.ai-repo-save.unidbg:*:0.10.0`，保留原 Java 包和 native JNI 名称。
+- `io.github.ai-repo-save:unidbg-robolectric-client:1.0.1`：轻量进程启动、JSON 通道、结果和取消。
+- `io.github.ai-repo-save:unidbg-robolectric-spi:1.0.1`：工作入口、资源登记、JNI handler / owner delegate / observer。
+- `io.github.ai-repo-save:unidbg-robolectric-worker:1.0.1`：官方 Android 生命周期的工作入口 JAR。
+- 底座为 `io.github.ai-repo-save.unidbg:*:0.10.1`，保留原 Java 包和 native JNI 名称。
 - Robolectric core 为 `io.github.ai-repo-save.robolectric:robolectric:1.0.0`，其余官方支持模块为 4.17；Android 11 / API 30，SDK 为 `android-all-instrumented:11-robolectric-6757853-i7`。
 
 支持 Linux x86-64、ARM64 Unicorn2。native resolver API、rootfs、自定义 emulator/syscall、有序 ELF 装载、post-map hooks、JNI_OnLoad 和业务回调由工作入口决定。native-only 不初始化 Robolectric，也不要求预插桩 SDK 目录。
@@ -16,7 +16,7 @@
 
 ## 构建与安装
 
-先从固定提交构建两个正式依赖。unidbg 的已公开基线提交为 `c9bb60eabc6fced2594ae9b4471015d02bd0b7b8`，仓库为 `https://github.com/ai-repo-save/unidbg`；Robolectric fork 仓库为 `https://github.com/ai-repo-save/robolectric`，正式源码提交为 `5acbb2b2b793dbdf6993ed0412da66606634b3bf`。所有构建使用 JDK 21。
+先从发行 manifest 记录的固定提交构建两个正式依赖。unidbg 仓库为 `https://github.com/ai-repo-save/unidbg`，要求 `0.10.1`，源码提交由其 `target/release-0.10.1/release-manifest.json` 记录；Robolectric fork 仓库为 `https://github.com/ai-repo-save/robolectric`，正式源码提交为 `5acbb2b2b793dbdf6993ed0412da66606634b3bf`。所有构建使用 JDK 21。
 
 ```sh
 (
@@ -65,7 +65,7 @@
 
 输出 `build/repository` 包含库的 JAR 制品及原坐标的两个 fork 制品；外部 fork 的 POM/module/provenance 保留原样。Maven publication 不绑定 worker 压缩包，`releaseLocal` 只发布 JAR 并生成一份安装。JAR、安装目录及 manifest 来自同一源码版本。正式版本不可被重新覆盖；开发阶段安装重建须等待使用者退出，不维护运行池或镜像管理器。
 
-需要压缩包时显式执行 `:worker:distZip` 或 `:worker:distTar`。
+本机 Maven 安装另行执行 `./gradlew --offline --no-daemon publishToMavenLocal`。需要压缩包时显式执行 `:worker:distZip` 或 `:worker:distTar`。
 
 Docker 可通过明确的 Maven-layout 和 offline distribution 命名 context 消费制品。运行镜像只需 JDK 21、可写的临时/会话目录，不需要 Gradle/Maven或联网下载 SDK。源码推送由发布协调者执行；此流程不部署服务或发布容器。
 

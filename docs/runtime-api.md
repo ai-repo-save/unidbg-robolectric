@@ -1,6 +1,6 @@
-# Runtime 1.0.0 公共合同
+# Runtime 1.0.1 公共合同
 
-坐标为 `io.github.ai-repo-save:unidbg-robolectric-{client,spi,worker}:1.0.0`，JDK 21。业务实现依赖 SPI；父进程仅依赖 client。worker distribution 提供执行环境与离线 API 30 SDK。底座为 `io.github.ai-repo-save.unidbg:*:0.10.0`；唯一 Robolectric core 为 `io.github.ai-repo-save.robolectric:robolectric:1.0.0`，复用官方支持模块 4.17。
+坐标为 `io.github.ai-repo-save:unidbg-robolectric-{client,spi,worker}:1.0.1`，JDK 21。业务实现依赖 SPI；父进程仅依赖 client。worker distribution 提供执行环境与离线 API 30 SDK。底座为 `io.github.ai-repo-save.unidbg:*:0.10.1`；唯一 Robolectric core 为 `io.github.ai-repo-save.robolectric:robolectric:1.0.0`，复用官方支持模块 4.17。
 
 ## 工作入口
 
@@ -19,6 +19,16 @@ public interface WorkerEntrypoint {
 `profile()`、`outputDirectory()`、`input()`、`output()`、`checkCancelled()` 提供输入、产物、持久机器通道和协作取消。
 
 `configureEmulator(existing)`、`configureVm(vm, jni)` 仅配置，不取得所有权。`createEmulator(factory)` 自动登记并配置新 emulator，`createVm(emulator, apk, jni)` 创建 VM 并接入类工厂。`own(resource)` 登记反序关闭；同一对象重复登记只关闭一次。消费者自行创建 emulator 时，load 失败由 loader 关闭，成功后可登记幂等 LoadResult；不要同时登记 LoadResult 和其 emulator。入口返回之前可提前关闭幂等资源。
+
+## Native 初始化返回值
+
+工作入口通过底座正式 API 获取 `JNI_OnLoad` 的真实返回值：
+
+```java
+int jniVersion = dalvikModule.callJNI_OnLoadWithResult(emulator);
+```
+
+该方法执行 VM 版本校验，并在 `finally` 中清理局部引用；native 调用或版本校验失败时传播异常。模块未导出 `JNI_OnLoad` 时抛 `IllegalStateException`，不会将缺符号映射为 `0`。可选初始化继续使用原 `void callJNI_OnLoad`，其缺符号合同为 no-op。runtime 不复制这套清理和校验，也不改变消费者的 ELF 装载顺序或初始化策略。
 
 ## JNI 组合
 

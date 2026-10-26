@@ -35,7 +35,7 @@ val prepareRuntime = tasks.register("prepareRuntime") {
             "version" to releaseVersion, "sourceRepository" to "https://github.com/ai-repo-save/unidbg-robolectric",
             "sourceCommit" to sourceCommit.get(), "sourceDirty" to sourceDirty.get(),
             "java" to 21, "androidSdk" to 30, "robolectric" to "io.github.ai-repo-save.robolectric:robolectric:1.0.0", "robolectricSupport" to "4.17",
-            "unidbg" to "io.github.ai-repo-save.unidbg:0.10.0",
+            "unidbg" to "io.github.ai-repo-save.unidbg:0.10.1",
             "sdk" to mapOf("coordinate" to "org.robolectric:android-all-instrumented:11-robolectric-6757853-i7", "file" to "sdk/${sdk.name}"),
             "worker" to "$releaseGroup:unidbg-robolectric-worker:$releaseVersion", "dependencies" to coordinates
         )
