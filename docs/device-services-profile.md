@@ -70,16 +70,16 @@ API 30 的 `Application` 是非 visual Context；调用 `Application.getDisplay(
 
 ## 显式集成验证
 
-`DeviceServicesIntegrationTest` 属于已有 `integration` 源集，不进入默认 `test` 或 `check`。测试启动正式 `WorkerMain` 子进程，在工作入口通过公开框架 getter 读回调用方配置。已有 worker 安装提供依赖、JVM 参数和离线 SDK；开发 classes 优先于安装中的 JAR，命令不覆盖安装。
+`DeviceServicesIntegrationTest` 属于已有 `integration` 源集，不进入默认 `test` 或 `check`。测试启动正式 `WorkerMain` 子进程，在工作入口通过公开框架 getter 读回调用方配置。`:worker:installDist` 构建当前 classes，并生成包含当前运行依赖（含 `apksig`）、JVM 参数和离线 SDK 的安装。`integrationClasses` 编译集成测试并处理 `src/integration/resources`，输出到 `build/classes/java/integration` 和 `build/resources/integration`。测试类路径优先使用当前 classes 和资源，再使用本次安装的依赖 JAR。
 
-在仓库根目录执行单个测试：
+使用 JDK 21，并按仓库构建步骤准备正式 fork 依赖。确认没有工作进程使用目标安装目录后，在仓库根目录构建安装并执行单个测试：
 
 ```sh
-./gradlew --offline --no-daemon :worker:classes compileIntegrationJava
+./gradlew --no-daemon :worker:installDist integrationClasses
 java \
   -Dintegration.runtime="$PWD/worker/build/install/unidbg-worker" \
   -Dintegration.evidenceDir="$PWD/build/evidence/services-$(date -u +%Y%m%dT%H%M%S%N)" \
-  -cp "worker/build/classes/java/main:worker/build/resources/main:spi/build/classes/java/main:client/build/classes/java/main:build/classes/java/integration:worker/build/install/unidbg-worker/lib/*" \
+  -cp "worker/build/classes/java/main:worker/build/resources/main:spi/build/classes/java/main:client/build/classes/java/main:build/classes/java/integration:build/resources/integration:worker/build/install/unidbg-worker/lib/*" \
   org.junit.runner.JUnitCore org.example.unidbg.DeviceServicesIntegrationTest
 ```
 
