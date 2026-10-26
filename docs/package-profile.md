@@ -50,3 +50,24 @@ Runtime 1.1.0 的 Android 模式通过 `profile.package` 配置唯一宿主，�
 签名验证事件为 `apk_signature_error`、`apk_signature_warning`、`apk_signatures_verified`。日志保留验证器返回的全局、各签名方案 signer、被忽略的 v1 signer 及 source stamp 的错误和警告。安装投影事件为 `package_profile_installed`，记录包名及输入位置。
 
 日志沿用 worker 的 JSON 持久化及 `trace_id`、`session_id`。输入保存在 `worker_started` 事件与 `effective-request.json`；启动失败由 worker 边界记录堆栈。
+
+## 定向验证
+
+`PackageProfileIntegrationTest` 位于独立的 integration 源集，不加入默认测试集。调用方提供真实采集的 profile 与独立 oracle JSON。`oracle.packages` 以实际包名为键，每项包含 `name`、`versionName`、`versionCode`、`uid`、`targetSdk`、`signatures`；需要核对权限的包另含 `requestedPermissions` 和 `requestedPermissionsFlags`。`signatures` 从真机导出的完整 DER 编码为 Base64，不从待验证 APK 生成预期值。
+
+以下命令只运行这一项集成测试。`PACKAGE_PROFILE` 和 `PACKAGE_ORACLE` 指向调用方准备的绝对 JSON 文件路径。
+
+```sh
+./gradlew --no-daemon integrationClasses :worker:installDist
+runtime="$PWD/worker/build/install/unidbg-worker"
+evidence="$PWD/build/evidence/package-profile-$(date -u +%Y%m%dT%H%M%S)"
+java -cp "$PWD/build/classes/java/integration:$runtime/lib/*" \
+  -Dintegration.runtime="$runtime" \
+  -Dintegration.fixtureClasspath="$PWD/build/classes/java/integration" \
+  -Dintegration.evidenceDir="$evidence" \
+  -Dintegration.packageProfile="${PACKAGE_PROFILE:?}" \
+  -Dintegration.packageOracle="${PACKAGE_ORACLE:?}" \
+  org.junit.runner.JUnitCore org.example.unidbg.PackageProfileIntegrationTest
+```
+
+测试通过真实 ARM64 JNIEnv 表调用 `getPackageInfo`、`Signature.toByteArray` 和权限字段读取，完整比较查询结果与 oracle。`pm-snapshot.json`、`effective-request.json` 和 worker 日志保存在该次证据目录。
