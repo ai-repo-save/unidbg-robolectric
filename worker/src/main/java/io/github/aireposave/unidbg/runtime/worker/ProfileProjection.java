@@ -85,6 +85,7 @@ final class ProfileProjection {
             });
             if (!editor.commit()) throw new IllegalStateException("Preference commit rejected: " + file.getKey());
         });
+        DeviceServicesProjection.apply(application, profile);
     }
     private ProfileProjection() {}
 }
