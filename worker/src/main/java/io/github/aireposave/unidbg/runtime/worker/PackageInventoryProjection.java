@@ -10,11 +10,24 @@ import org.robolectric.shadow.api.Shadow;
 import org.robolectric.shadows.ShadowPackageManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 
 final class PackageInventoryProjection {
     private static final Logger LOG = LoggerFactory.getLogger(PackageInventoryProjection.class);
 
-    static void apply(Application application, JsonNode profile, PackageInfo host) {
+    static void apply(Application application, JsonNode request, PackageInfo host) {
+        var previous = MDC.getCopyOfContextMap();
+        try {
+            MDC.put("trace_id", request.required("traceId").textValue());
+            MDC.put("session_id", request.required("sessionId").textValue());
+            applyProfile(application, request.required("profile"), host);
+        } finally {
+            if (previous == null) MDC.clear();
+            else MDC.setContextMap(previous);
+        }
+    }
+
+    private static void applyProfile(Application application, JsonNode profile, PackageInfo host) {
         ShadowPackageManager packages = Shadow.extract(application.getPackageManager());
         host.applicationInfo = application.getApplicationInfo();
         install(application, packages, host, profile.required("package"), "profile.package");

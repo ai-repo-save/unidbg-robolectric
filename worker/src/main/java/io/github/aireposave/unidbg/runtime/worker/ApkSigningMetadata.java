@@ -37,7 +37,7 @@ final class ApkSigningMetadata {
         if (lineage != null) certificates = List.of(lineage.getCertificatesInLineage().get(0));
         ArrayNode signatures = RequestData.JSON.createArrayNode();
         for (var certificate : certificates) signatures.add(Base64.getEncoder().encodeToString(certificate.getEncoded()));
-        LOG.info("event=apk_signatures_verified apk={} v1={} v2={} v3={} v31={} legacySigners={} lineage={}",
+        LOG.info("event=apk_signatures_verified apk={} v1={} v2={} v3={} v31={} getSignaturesCertificateCount={} lineage={}",
                 source, result.isVerifiedUsingV1Scheme(), result.isVerifiedUsingV2Scheme(), result.isVerifiedUsingV3Scheme(),
                 result.isVerifiedUsingV31Scheme(), signatures.size(), lineage != null);
         return signatures;

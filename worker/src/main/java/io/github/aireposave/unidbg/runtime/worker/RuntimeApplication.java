@@ -9,11 +9,12 @@ public final class RuntimeApplication extends Application {
     public void onCreate() {
         super.onCreate();
         try {
-            var profile = RequestData.read().required("profile");
+            var request = RequestData.read();
+            var profile = request.required("profile");
             String name = ProfileValues.text(profile.required("package").required("name"), "package.name");
             if (!getPackageName().equals(name)) throw new IllegalStateException("Framework Application identity differs from profile: " + getPackageName());
             PackageInfo info = getPackageManager().getPackageInfo(name, PackageManager.GET_SIGNATURES);
-            PackageInventoryProjection.apply(this, profile, info);
+            PackageInventoryProjection.apply(this, request, info);
         } catch (Exception failure) {
             throw new IllegalStateException("Cannot configure runtime Application metadata", failure);
         }
