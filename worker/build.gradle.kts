@@ -8,6 +8,7 @@ dependencies {
     implementation("junit:junit:4.13.2")
     implementation("info.picocli:picocli:4.7.6")
     implementation("org.slf4j:slf4j-api:2.0.20")
+    implementation("com.android.tools.build:apksig:9.4.1")
     runtimeOnly("ch.qos.logback:logback-classic:1.5.18")
     runtimeOnly("net.logstash.logback:logstash-logback-encoder:8.1")
 }

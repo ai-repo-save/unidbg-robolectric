@@ -35,7 +35,7 @@ allprojects {
             }
         }
         mavenCentral()
-        google { content { includeGroupByRegex("androidx\\..*") } }
+        google { content { includeGroupByRegex("androidx\\..*"); includeModule("com.android.tools.build", "apksig") } }
     }
 }
 
