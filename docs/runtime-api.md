@@ -1,6 +1,6 @@
-# Runtime 1.0.1 公共合同
+# Runtime 1.1.0 公共合同
 
-坐标为 `io.github.ai-repo-save:unidbg-robolectric-{client,spi,worker}:1.0.1`，JDK 21。业务实现依赖 SPI；父进程仅依赖 client。worker distribution 提供执行环境与离线 API 30 SDK。底座为 `io.github.ai-repo-save.unidbg:*:0.10.1`；唯一 Robolectric core 为 `io.github.ai-repo-save.robolectric:robolectric:1.0.0`，复用官方支持模块 4.17。
+坐标为 `io.github.ai-repo-save:unidbg-robolectric-{client,spi,worker}:1.1.0`，JDK 21。业务实现依赖 SPI；父进程仅依赖 client。worker distribution 提供执行环境与离线 API 30 SDK。底座为 `io.github.ai-repo-save.unidbg:*:0.12.0`；唯一 Robolectric core 为 `io.github.ai-repo-save.robolectric:robolectric:1.1.0`，复用官方支持模块 4.17。
 
 ## 工作入口
 
@@ -29,6 +29,10 @@ int jniVersion = dalvikModule.callJNI_OnLoadWithResult(emulator);
 ```
 
 该方法执行 VM 版本校验，并在 `finally` 中清理局部引用；native 调用或版本校验失败时传播异常。模块未导出 `JNI_OnLoad` 时抛 `IllegalStateException`，不会将缺符号映射为 `0`。可选初始化继续使用原 `void callJNI_OnLoad`，其缺符号合同为 no-op。runtime 不复制这套清理和校验，也不改变消费者的 ELF 装载顺序或初始化策略。
+
+## Proxy 宿主值
+
+JNI 回调通过 `ProxyDvmObject.unpack(DvmObject<?>)` 取得宿主值，复用底座正式转换。proxy 对象数组保留原 backing array、组件类型和引用身份；proxy Class 依赖既有 ProxyClassFactory 配置。null 输入返回 null，无宿主值的 wrapper 抛 UnsupportedOperationException。该操作不新增或清理 VM 引用，也不转移所有权。
 
 ## JNI 组合
 
@@ -72,11 +76,11 @@ session.configureVm(vm, jni);
 }
 ```
 
-Android 模式提供 `package.name` 或单独提供 `package.apk`。`apk` 是所建宿主 Application 的 APK 身份来源，必须是存在的绝对文件路径；库在同 JVM 引导前使用底座已有 apk-parser 读取 name / versionName / versionCode / targetSdk 与该解析器支持的 v1 签名。显式提供同字段时必须与 APK 一致，冲突拒绝；派生后的配置保存在 effective-request.json。不执行 DEX。
+Android 模式提供 `package.name` 或单独提供 `package.apk`。`apk` 是所建宿主 Application 的 APK 身份来源，必须是存在的绝对文件路径；库在同 JVM 引导前通过 apk-parser 读取 name / versionName / versionCode / targetSdk，通过官方 apksig 9.4.1 验证并派生 API 30 GET_SIGNATURES 身份。显式提供同字段时必须与 APK 一致，冲突拒绝；派生后的配置保存在 effective-request.json。不执行 DEX。
 
 `createVm(emulator, moduleApk, jni)` 的模块 APK 独立于此来源。例如 DroidGuard 下载 VM 的 APK 包不是宿主 GMS，不能将它当作 package.apk 来重定义 Application 身份。
 
-可选 package 字段还有 `signatures`（Base64 签名字节数组）、`installer`、`flags`、`nativeLibraryDir`、`guestSourceDir`。物理 `apk` 用于宿主资源/元数据，`guestSourceDir` 只是 native IO 的显式文件挂载别名，不把宿主 APK 路径宣称为 guest 路径。包身份由轻量 core fork 的公开 applicationPackageName/applicationProcessName 配置在官方 Package、ApplicationInfo、BoundApplication 原初始化处建立。可选 package.uid 由官方 TestEnvironmentLifecyclePlugin.onSetupApplicationState 在绑定前调用 ShadowProcess.setUid；未提供时保持 Process.myUid 原默认。Application 使用官方 base，不替换 Context、另装身份包或改私有字段；元数据在 onCreate 中通过公开字段和 PM shadow 配置。
+可选 package 字段还有 `signatures`（Base64 证书 DER 数组）、`installer`、`flags`、`nativeLibraryDir`、`guestSourceDir` 和成对采集的 `requestedPermissions` / `requestedPermissionsFlags`。`packages` 数组提供附加已安装包，复用相同元数据投影，不改变宿主身份。物理 `apk` 用于宿主资源/元数据，`guestSourceDir` 是 native IO 的显式文件挂载别名。包身份和 APK 路径由 core 的公开 applicationPackageName/applicationProcessName/applicationSourceDir 配置在 Package、ApplicationInfo、BoundApplication 和 LoadedApk 初始化处建立。可选 package.uid 由官方 TestEnvironmentLifecyclePlugin.onSetupApplicationState 在绑定前调用 ShadowProcess.setUid；未提供时保持 Process.myUid 原默认。Application 使用官方 base；其他包元数据在 onCreate 中通过公开字段和 PM shadow 配置。
 
 Build 支持 MODEL / MANUFACTURER / BRAND / DEVICE / PRODUCT / BOARD / HARDWARE / FINGERPRINT / SERIAL。SERIAL 通过公开 ShadowBuild.setSerial 配置 Build.getSerial()，同时派生 ro.serialno；API 30 的弃用静态字段 Build.SERIAL 按 Android 合同保持 Build.UNKNOWN，不作为真实序列号的读取入口。共同的 native 属性由相同输入派生，冲突输入拒绝。Settings 支持 global / secure / system，值是字符串或 null。偏好支持字符串、boolean、int、long；更复杂服务配置在入口中使用公开 shadows，不建立通用设备桩。
 

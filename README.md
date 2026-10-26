@@ -4,11 +4,11 @@
 
 ## 公共制品
 
-- `io.github.ai-repo-save:unidbg-robolectric-client:1.0.1`：轻量进程启动、JSON 通道、结果和取消。
-- `io.github.ai-repo-save:unidbg-robolectric-spi:1.0.1`：工作入口、资源登记、JNI handler / owner delegate / observer。
-- `io.github.ai-repo-save:unidbg-robolectric-worker:1.0.1`：官方 Android 生命周期的工作入口 JAR。
-- 底座为 `io.github.ai-repo-save.unidbg:*:0.10.1`，保留原 Java 包和 native JNI 名称。
-- Robolectric core 为 `io.github.ai-repo-save.robolectric:robolectric:1.0.0`，其余官方支持模块为 4.17；Android 11 / API 30，SDK 为 `android-all-instrumented:11-robolectric-6757853-i7`。
+- `io.github.ai-repo-save:unidbg-robolectric-client:1.1.0`：轻量进程启动、JSON 通道、结果和取消。
+- `io.github.ai-repo-save:unidbg-robolectric-spi:1.1.0`：工作入口、资源登记、JNI handler / owner delegate / observer。
+- `io.github.ai-repo-save:unidbg-robolectric-worker:1.1.0`：官方 Android 生命周期的工作入口 JAR。
+- 底座为 `io.github.ai-repo-save.unidbg:*:0.12.0`，保留原 Java 包和 native JNI 名称。
+- Robolectric core 为 `io.github.ai-repo-save.robolectric:robolectric:1.1.0`，其余官方支持模块为 4.17；Android 11 / API 30，SDK 为 `android-all-instrumented:11-robolectric-6757853-i7`。
 
 支持 Linux x86-64、ARM64 Unicorn2。native resolver API、rootfs、自定义 emulator/syscall、有序 ELF 装载、post-map hooks、JNI_OnLoad 和业务回调由工作入口决定。native-only 不初始化 Robolectric，也不要求预插桩 SDK 目录。
 
@@ -16,7 +16,7 @@
 
 ## 构建与安装
 
-先从发行 manifest 记录的固定提交构建两个正式依赖。unidbg 仓库为 `https://github.com/ai-repo-save/unidbg`，要求 `0.10.1`，源码提交由其 `target/release-0.10.1/release-manifest.json` 记录；Robolectric fork 仓库为 `https://github.com/ai-repo-save/robolectric`，正式源码提交为 `5acbb2b2b793dbdf6993ed0412da66606634b3bf`。所有构建使用 JDK 21。
+先从发行 manifest 记录的固定提交构建两个正式依赖。unidbg 仓库为 `https://github.com/ai-repo-save/unidbg`，要求 `0.12.0`，源码提交由其 `target/release-0.12.0/release-manifest.json` 记录；Robolectric fork 仓库为 `https://github.com/ai-repo-save/robolectric`，要求 core `1.1.0`，正式源码提交由其 `robolectric-1.1.0.provenance.json` 记录。所有构建使用 JDK 21。
 
 ```sh
 (
@@ -46,7 +46,7 @@
 
 会话启动检查 API 版本、所选 SDK 和必需文件。runtime-manifest 记录版本、源码 Git 提交、依赖坐标、JDK/API 和 SDK 路径等构建事实。Gradle/Maven 负责依赖下载及其自身校验。
 
-`jniIntegration` 是唯一整体集成入口，不进入默认 test/check。每次运行重新执行，XML/HTML 与工作会话产物保存在独立 `build/evidence/<UTC 时间>/`。运行日志为 stderr 和每会话 `logs/worker.jsonl`；原始诊断、完整工作 JVM maps、Android 数据副本与结果文件分别保存。证据保留到显式 clean；活动 worker 期间不 clean 或覆盖安装。
+`jniIntegration` 是发行整体集成入口，不进入默认 test/check。每次运行重新执行，XML/HTML 与工作会话产物保存在独立 `build/evidence/<UTC 时间>/`。运行日志为 stderr 和每会话 `logs/worker.jsonl`；原始诊断、完整工作 JVM maps、Android 数据副本与结果文件分别保存。证据保留到显式 clean；活动 worker 期间不 clean 或覆盖安装。
 
 构建使用 Gradle 9.5.0 官方 wrapper，发行下载校验由 wrapper 处理。
 

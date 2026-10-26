@@ -15,7 +15,7 @@ java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
 
 allprojects {
     group = "io.github.ai-repo-save"
-    version = "1.0.1"
+    version = "1.1.0"
     repositories {
         providers.gradleProperty("unidbgRepository").orNull?.let { repository ->
             maven { url = uri(repository); content { includeGroup("io.github.ai-repo-save.unidbg") } }
@@ -109,10 +109,10 @@ dependencies {
     add(integration.implementationConfigurationName, "junit:junit:4.13.2")
     add(integration.implementationConfigurationName, project(":client"))
     add(integration.implementationConfigurationName, project(":spi"))
-    add(integration.implementationConfigurationName, "io.github.ai-repo-save.robolectric:robolectric:1.0.0")
+    add(integration.implementationConfigurationName, "io.github.ai-repo-save.robolectric:robolectric:1.1.0")
     add(integration.implementationConfigurationName, "org.robolectric:android-all:11-robolectric-6757853")
-    add(integration.implementationConfigurationName, "io.github.ai-repo-save.unidbg:unidbg-android:0.10.1")
-    add(integration.implementationConfigurationName, "io.github.ai-repo-save.unidbg:unidbg-unicorn2:0.10.1")
+    add(integration.implementationConfigurationName, "io.github.ai-repo-save.unidbg:unidbg-android:0.12.0")
+    add(integration.implementationConfigurationName, "io.github.ai-repo-save.unidbg:unidbg-unicorn2:0.12.0")
     add(integration.implementationConfigurationName, "org.slf4j:slf4j-api:2.0.20")
     add(integration.runtimeOnlyConfigurationName, "ch.qos.logback:logback-classic:1.5.18")
     add(integration.runtimeOnlyConfigurationName, "net.logstash.logback:logstash-logback-encoder:8.1")
