@@ -78,7 +78,7 @@ Android 模式提供 `package.name` 或单独提供 `package.apk`。`apk` 是所
 
 可选 package 字段还有 `signatures`（Base64 签名字节数组）、`installer`、`flags`、`nativeLibraryDir`、`guestSourceDir`。物理 `apk` 用于宿主资源/元数据，`guestSourceDir` 只是 native IO 的显式文件挂载别名，不把宿主 APK 路径宣称为 guest 路径。包身份由轻量 core fork 的公开 applicationPackageName/applicationProcessName 配置在官方 Package、ApplicationInfo、BoundApplication 原初始化处建立。可选 package.uid 由官方 TestEnvironmentLifecyclePlugin.onSetupApplicationState 在绑定前调用 ShadowProcess.setUid；未提供时保持 Process.myUid 原默认。Application 使用官方 base，不替换 Context、另装身份包或改私有字段；元数据在 onCreate 中通过公开字段和 PM shadow 配置。
 
-Build 支持 MODEL / MANUFACTURER / BRAND / DEVICE / PRODUCT / BOARD / HARDWARE / FINGERPRINT / SERIAL。共同的 native 属性由相同输入派生，冲突输入拒绝。Settings 支持 global / secure / system，值是字符串或 null。偏好支持字符串、boolean、int、long；更复杂服务配置在入口中使用公开 shadows，不建立通用设备桩。
+Build 支持 MODEL / MANUFACTURER / BRAND / DEVICE / PRODUCT / BOARD / HARDWARE / FINGERPRINT / SERIAL。SERIAL 通过公开 ShadowBuild.setSerial 配置 Build.getSerial()，同时派生 ro.serialno；API 30 的弃用静态字段 Build.SERIAL 按 Android 合同保持 Build.UNKNOWN，不作为真实序列号的读取入口。共同的 native 属性由相同输入派生，冲突输入拒绝。Settings 支持 global / secure / system，值是字符串或 null。偏好支持字符串、boolean、int、long；更复杂服务配置在入口中使用公开 shadows，不建立通用设备桩。
 
 库挂载 guestDataDirectory 到公开 Application.getDataDir()，供 native IO 与宿主 Android API 共享真实文件；同时保留宿主 API 返回的实际数据路径别名，逐条记录 guest、host 和来源。File.getPath 不被改写，不按 JNI 签名伪造 File。native resolver API、rootfs、自定义 syscall 和 ELF 策略仍由 worker-local consumer factory 决定，不由 androidSdk 推导。
 

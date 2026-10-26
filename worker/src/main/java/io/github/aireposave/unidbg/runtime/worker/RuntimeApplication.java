@@ -24,10 +24,6 @@ public final class RuntimeApplication extends Application {
             app.targetSdkVersion = ProfileValues.integer(profile, "targetSdk", 30);
             if (profile.has("flags")) app.flags = ProfileValues.integer(profile, "flags", 0);
             if (profile.has("nativeLibraryDir")) app.nativeLibraryDir = ProfileValues.text(profile.required("nativeLibraryDir"), "package.nativeLibraryDir");
-            if (profile.has("apk")) {
-                app.sourceDir = ProfileValues.text(profile.required("apk"), "package.apk");
-                app.publicSourceDir = app.sourceDir;
-            }
             info.applicationInfo = app;
             if (profile.has("signatures")) {
                 var signatures = profile.required("signatures");

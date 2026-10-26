@@ -47,6 +47,10 @@ public final class WorkerExecution {
                         String packageName = effective.required("profile").required("package").required("name").textValue();
                         System.setProperty("robolectric.applicationPackageName", packageName);
                         System.setProperty("robolectric.applicationProcessName", ProfileValues.text(effective.required("profile"), "processName", packageName));
+                        var sourceApk = effective.required("profile").required("package").get("apk");
+                        if (sourceApk != null) {
+                            System.setProperty("robolectric.applicationSourceDir", ProfileValues.text(sourceApk, "package.apk"));
+                        }
                         log.info("event=application_metadata_resolved package={} version={} effectiveRequest={}",
                                 effective.path("profile").path("package").path("name").asText(),
                                 effective.path("profile").path("package").path("versionName").asText(), effectivePath);
