@@ -1,5 +1,6 @@
 package io.github.aireposave.unidbg.runtime.worker;
 
+import android.app.ActivityManager;
 import android.app.Application;
 import android.content.Context;
 import android.hardware.Sensor;
@@ -13,6 +14,7 @@ import java.util.List;
 import java.util.Set;
 import org.robolectric.shadow.api.Shadow;
 import org.robolectric.shadows.SensorBuilder;
+import org.robolectric.shadows.ShadowActivityManager;
 import org.robolectric.shadows.ShadowDisplay;
 import org.robolectric.shadows.ShadowDisplayManager;
 import org.robolectric.shadows.ShadowPackageManager;
@@ -26,10 +28,11 @@ final class DeviceServicesProjection {
     static void apply(Application application, JsonNode profile) {
         if (!profile.has("services")) return;
         JsonNode services = profile.get("services");
-        object(services, "services", Set.of("systemFeatures", "display", "sensors"));
+        object(services, "services", Set.of("systemFeatures", "display", "sensors", "memory"));
         if (services.has("systemFeatures")) systemFeatures(application, services.get("systemFeatures"));
         if (services.has("display")) display(application, services.get("display"));
         if (services.has("sensors")) sensors(application, services.get("sensors"));
+        if (services.has("memory")) memory(application, services.get("memory"));
     }
 
     private static void systemFeatures(Application application, JsonNode features) {
@@ -38,6 +41,16 @@ final class DeviceServicesProjection {
         features.fields().forEachRemaining(entry -> packages.setSystemFeature(entry.getKey(),
                 bool(entry.getValue(), "services.systemFeatures." + entry.getKey())));
         LOG.info("event=system_features_projected count={}", features.size());
+    }
+
+    private static void memory(Application application, JsonNode configuration) {
+        object(configuration, "services.memory", Set.of("totalMem"));
+        ActivityManager.MemoryInfo info = new ActivityManager.MemoryInfo();
+        info.totalMem = longValue(configuration.required("totalMem"), "services.memory.totalMem");
+        ActivityManager manager = (ActivityManager) application.getSystemService(Context.ACTIVITY_SERVICE);
+        ShadowActivityManager shadow = Shadow.extract(manager);
+        shadow.setMemoryInfo(info);
+        LOG.info("event=memory_profile_projected totalMem={}", info.totalMem);
     }
 
     private static void display(Application application, JsonNode configuration) {
@@ -122,6 +135,11 @@ final class DeviceServicesProjection {
         value.fieldNames().forEachRemaining(field -> {
             if (!fields.contains(field)) throw new IllegalArgumentException("Unsupported profile field: " + path + "." + field);
         });
+    }
+
+    private static long longValue(JsonNode value, String path) {
+        if (!value.isIntegralNumber() || !value.canConvertToLong()) throw new IllegalArgumentException(path + " must be a 64-bit integer");
+        return value.longValue();
     }
 
     private static int integer(JsonNode value, String path) {

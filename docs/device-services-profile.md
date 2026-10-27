@@ -2,13 +2,17 @@
 
 Android 模式通过可选的 `profile.services` 配置框架服务。`RuntimeApplication` 初始化后，`ProfileProjection` 在调用工作入口之前应用配置。输入来自调用方；库通过基于 Robolectric 4.17 的 fork 公开 API 投影，不预置设备采集值。
 
-`services` 是 JSON 对象，支持 `systemFeatures`、`display`、`sensors`。省略 `services` 或其中一项时保留对应框架初始状态。所有配置对象拒绝未知字段；`systemFeatures` 的键是调用方提供的功能名称。字段值拒绝 `null` 和类型转换。整数要求有符号 32 位 JSON 整数；浮点数要求能表示为有限 `float` 的 JSON 数字。
+`services` 是 JSON 对象，支持 `systemFeatures`、`display`、`sensors`、`memory`。省略 `services` 或其中一项时保留对应框架初始状态。所有配置对象拒绝未知字段；`systemFeatures` 的键是调用方提供的功能名称。字段值拒绝 `null` 和类型转换。整数要求有符号 32 位 JSON 整数；浮点数要求能表示为有限 `float` 的 JSON 数字。
 
 ## System features
 
 `services.systemFeatures` 是功能名称到 JSON boolean 的映射。每项通过 `ShadowPackageManager.setSystemFeature(name, supported)` 设置，供 `PackageManager.hasSystemFeature(name)` 读取。显式 `false` 表示不支持；未列出的功能保留框架初始状态。
 
 该映射独立于传感器和显示配置。库不根据其他服务、机型或 API 级别推导功能支持情况。
+
+## 内存
+
+`services.memory.totalMem` 是 JSON 整数，单位是字节。库把它写入 `ActivityManager.MemoryInfo.totalMem`，再通过 `ShadowActivityManager.setMemoryInfo` 提供给 `ActivityManager.getMemoryInfo`。该值对应设备 `dumpsys meminfo` 的 Total RAM 乘以 1024。未提供 `memory` 时，`totalMem` 保持框架初始值 0。
 
 ## 默认显示
 
