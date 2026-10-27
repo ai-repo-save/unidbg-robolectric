@@ -61,22 +61,24 @@ acceptMethod/acceptField 是独立同步元数据操作，其 result 为 boolean
 
 ## 未发布底座开发消费
 
-当前源码声明版本为 1.2.2；开发装配不是新发布的 1.2.2。默认发行依赖和版本保持原声明。新 SPI 需要含 JniCallPlan 的底座 build identity，在正式坐标升级前使用显式开发入口：
+开发构建从底座构建输出读取核心 classes 路径和依赖路径，使用 Gradle Jar 打包核心 classes，并通过 Gradle 解析 Maven 依赖。runtime 自身提供 Jackson、picocli、Logback 和 fork APK parser。
 
 ```sh
-./gradlew -PdevelopmentBuildIdentity=/absolute/build-identity.json \
+./gradlew -PdevelopmentCoreClasspath=/absolute/core/classpath.txt \
+  -PdevelopmentConsumerClasspath=/absolute/consumer-classpath.txt \
   -ProbolectricRepository=file:///absolute/robolectric-repository \
   -PapkParserRepository=file:///absolute/apk-parser-repository \
   developmentInstall
-./gradlew -PdevelopmentBuildIdentity=/absolute/build-identity.json \
+./gradlew -PdevelopmentCoreClasspath=/absolute/core/classpath.txt \
+  -PdevelopmentConsumerClasspath=/absolute/consumer-classpath.txt \
   -ProbolectricRepository=file:///absolute/robolectric-repository \
   -PapkParserRepository=file:///absolute/apk-parser-repository \
   developmentJniIntegration
 ```
 
-输入必须为 schema 1、kind=build、published=false。开发模式按完整目录清单、逐文件摘要与字节数核对三核心 classes 的输入和安装结果，按精确 module 排除旧 unidbg-api / unidbg-android / unidbg-unicorn2 依赖，再接入原 classes 与正式 Maven POM 声明的依赖。producer 附加的 consumer_classpath_file 按原路径和 SHA-256 分离；runtime 由自己的 Gradle 图提供 Jackson、picocli 与 Logback。底座依赖使用 Gradle 正常解析与冲突决议。runtime 保留 net.dongliu:apk-parser:2.6.10 的明确排除，唯一 parser 为自身已声明的 fork 2.6.11；不按文件名猜测坐标。
+`developmentCoreClasspath` 指向底座构建输出的 classpath 文件，内容为平台路径分隔符连接的目录和 JAR 路径。核心目录名为对应模块名；依赖 JAR 使用相邻 Maven POM 中的坐标。底座 classpath 包含消费者依赖时，`developmentConsumerClasspath` 指定该消费者的 classpath 文件，由 runtime 自身的依赖声明替代这些依赖。Gradle 排除已发布的同名核心模块，使用选定的核心 classes。
 
-开发输出位于 `build/development/<identity-sha256前16位>/`。`developmentInstall` 使用原 WorkerMain 与 client 协议；worker JAR 的 Class-Path 保留有序依赖与未经重新编译的核心目录。安装 manifest 记录 development=true、published=false、sourceDeclaredVersion、源码提交与脏状态、源码文件摘要、完整底座 identity、输入摘要、producer consumer 排除、parser 差异、declared/resolved 依赖、安装二进制与有序 classpath。`bottomDependencySelections` 按 group:module 关联每项底座声明与实际选用的坐标、来源和摘要，记录 sameCoordinate 与 sameBytes，不强制依赖解析后的字节等同于 producer。`spiClasspath` 提供消费者所需的新 SPI JAR、三核心目录与 SPI 依赖的已安装路径，逐项记录 kind、文件摘要、核心 component 与原目录 files 清单；消费者直接核对完整目录清单和逐文件身份，并在编译收据记录实际文件身份，不再独立解析底座 identity。开发 classpath 不声明与 collector 的完整 classpath 逐项相等。装配验证 parser 类仅有 fork 来源、SLF4J provider 仅为 Logback。开发模式拒绝 publish、releaseLocal 与普通发行安装任务。
+各模块开发输出位于自身的 `build/development/`。`developmentInstall` 调用 `:worker:installDist`，安装目录为 `worker/build/development/install/unidbg-worker/`。消费者通过 `-PruntimeDevelopmentDirectory=/absolute/unidbg-worker` 使用安装目录中的 `lib/*.jar` 编译。
 
 `developmentJniIntegration` 仅显式执行现有单项 lifecycle/JNI 集成，不加入默认测试集。它使用真实子进程，覆盖 worker 隔离、持久通道、取消与资源关闭，同时验证 ordinary/A 的 modeled overload、HostJni owner、Host→Host continuation、失败恢复、规范化观察值与无 WorkerSession 的宿主 getter。
 

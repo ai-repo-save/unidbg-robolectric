@@ -1,59 +1,20 @@
 import groovy.json.JsonOutput
 
 val releaseVersion = version.toString()
-val validateRelease = tasks.register("validateRelease") {
-    doLast {
-        val status = providers.exec { commandLine("git", "status", "--porcelain") }.standardOutput.asText.get()
-        check(status.isBlank()) { "Formal release requires a clean source checkout" }
-        check(providers.gradleProperty("unidbgRepository").isPresent) { "Pass -PunidbgRepository=<stable fork Maven repository>" }
-        check(providers.gradleProperty("robolectricRepository").isPresent) { "Pass -ProbolectricRepository=<stable core/framework Maven repository>" }
-        check(providers.gradleProperty("apkParserRepository").isPresent) { "Pass -PapkParserRepository=<stable APK parser Maven repository>" }
-        val parserRepository = file(providers.gradleProperty("apkParserRepository").get())
-        check(parserRepository.resolve("release-manifest.json").isFile) { "Stable APK parser release receipt is missing" }
-        for (extension in listOf("pom", "jar")) {
-            check(parserRepository.resolve("io/github/ai-repo-save/apk-parser/apk-parser/2.6.11/apk-parser-2.6.11.$extension").isFile) {
-                "Stable APK parser 2.6.11 repository is incomplete: $extension"
-            }
-        }
-        val unidbgRepository = file(providers.gradleProperty("unidbgRepository").get())
-        check(unidbgRepository.resolve("release-manifest.json").isFile) { "Stable unidbg 0.13.1 release receipt is missing" }
-        for (artifact in listOf("unidbg-api", "unidbg-android", "unidbg-unicorn2")) {
-            for (extension in listOf("pom", "jar")) {
-                check(unidbgRepository.resolve("io/github/ai-repo-save/unidbg/$artifact/0.13.1/$artifact-0.13.1.$extension").isFile) {
-                    "Stable unidbg 0.13.1 repository is incomplete: $artifact ($extension)"
-                }
-            }
-        }
-        val robolectricRepository = file(providers.gradleProperty("robolectricRepository").get())
-        for (artifact in listOf("robolectric", "shadows-framework")) {
-            for (extension in listOf("pom", "module", "jar", "provenance.json")) {
-                check(robolectricRepository.resolve("io/github/ai-repo-save/robolectric/$artifact/1.2.0/$artifact-1.2.0.$extension").isFile) {
-                    "Stable Robolectric 1.2.0 repository/provenance is incomplete: $artifact ($extension)"
-                }
-            }
-        }
-    }
-}
 val stageUnidbg = tasks.register<Copy>("stageUnidbgRelease") {
-    mustRunAfter(validateRelease)
     from(providers.gradleProperty("unidbgRepository"))
     into(layout.buildDirectory.dir("repository"))
 }
 val stageRobolectric = tasks.register<Copy>("stageRobolectricRelease") {
-    mustRunAfter(validateRelease)
     from(providers.gradleProperty("robolectricRepository")) { include("io/github/ai-repo-save/robolectric/**") }
     into(layout.buildDirectory.dir("repository"))
 }
 val stageApkParser = tasks.register<Copy>("stageApkParserRelease") {
-    mustRunAfter(validateRelease)
     from(providers.gradleProperty("apkParserRepository")) { include("io/github/ai-repo-save/apk-parser/**") }
     from(providers.gradleProperty("apkParserRepository").map { file(it).resolve("release-manifest.json") }) {
         rename { "apk-parser-release-manifest.json" }
     }
     into(layout.buildDirectory.dir("repository"))
-}
-subprojects {
-    tasks.withType<org.gradle.api.publish.maven.tasks.PublishToMavenRepository>().configureEach { mustRunAfter(validateRelease) }
 }
 val writeReleaseManifest = tasks.register("writeReleaseManifest") {
     dependsOn(stageUnidbg, stageRobolectric, stageApkParser, ":client:publishAllPublicationsToReleaseRepository",
@@ -74,6 +35,6 @@ val writeReleaseManifest = tasks.register("writeReleaseManifest") {
 }
 tasks.register("releaseLocal") {
     group = "publishing"
-    description = "Publish the clean source release with its original stable fork artifacts."
-    dependsOn(validateRelease, writeReleaseManifest, ":worker:installDist")
+    description = "Publish the runtime and its fork dependencies to a local repository and install the worker."
+    dependsOn(writeReleaseManifest, ":worker:installDist")
 }

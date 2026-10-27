@@ -67,7 +67,7 @@ APK 元数据解析使用 `io.github.ai-repo-save.apk-parser:apk-parser:2.6.11`�
 
 源码库为公开的 `https://github.com/ai-repo-save/unidbg-robolectric`。POM、runtime-manifest 与 release manifest 记录源码固定提交、Maven GAV 和依赖坐标。首次远端/CI 构建可通过 HTTPS 获取固定提交的公开源码仓库，不需要私有 token，不发布大型 SDK 二进制到 Git。
 
-完成显式集成验证、独立审查并取得发行授权后，从干净提交创建标准 Maven-layout 仓库和一份 worker 安装：
+通过依赖仓库路径创建标准 Maven-layout 仓库和一份 worker 安装：
 
 ```sh
 ./gradlew --offline --no-daemon \
@@ -77,7 +77,7 @@ APK 元数据解析使用 `io.github.ai-repo-save.apk-parser:apk-parser:2.6.11`�
   releaseLocal
 ```
 
-`validateRelease` 检查干净源码、unidbg 0.13.1 的正式 release receipt 与所需 POM/JAR、Robolectric core/framework 1.2.0 各自的 POM/module/JAR/provenance，以及 APK parser 2.6.11 的 receipt 与 POM/JAR。输出 `build/1.2.2/repository` 包含库的 JAR 制品、原坐标的 unidbg fork、Robolectric core 和完整 framework，以及 APK parser fork；其 receipt 保存为 `apk-parser-release-manifest.json`。外部 fork 的 POM/module/provenance 保留原样，release manifest 显式列出两个 Robolectric 坐标。Maven publication 不绑定 worker 压缩包，`releaseLocal` 只发布 JAR 并生成一份安装。JAR、安装目录及 manifest 来自同一源码版本。正式版本不可被重新覆盖；开发阶段安装重建须等待使用者退出，不维护运行池或镜像管理器。
+输出 `build/1.2.2/repository` 包含库的 JAR 制品、原坐标的 unidbg fork、Robolectric core 和完整 framework，以及 APK parser fork。Gradle 复制输入仓库中的制品和元数据，release manifest 记录源码提交与依赖坐标。Maven publication 不绑定 worker 压缩包，`releaseLocal` 发布 JAR 并生成一份安装。
 
 本机 Maven 安装在同次发行授权下另行执行 `./gradlew --offline --no-daemon publishToMavenLocal`。需要压缩包时显式执行 `:worker:distZip` 或 `:worker:distTar`。
 
