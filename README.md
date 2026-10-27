@@ -59,7 +59,7 @@ APK 元数据解析使用 `io.github.ai-repo-save.apk-parser:apk-parser:2.6.11`�
 
 `jniIntegration` 是发行整体集成入口，不进入默认 test/check。每次运行重新执行，XML/HTML 与工作会话产物保存在独立 `build/1.2.2/evidence/<UTC 时间>/`。运行日志为 stderr 和每会话 `logs/worker.jsonl`；原始诊断、完整工作 JVM maps、Android 数据副本与结果文件分别保存。证据保留到显式 clean；活动 worker 期间不 clean 或覆盖安装。
 
-仅验证 APK 元数据解析和 Android worker 启动时，显式运行 `apkStartupIntegration`，并提供 `-PstartupApk=/absolute/path/to/original.apk` 与依赖仓库参数。该测试只传见证 classes 目录，记录实际 parser code source 和类资源列表，独立读取 worker 写出的随机内容见证；不执行 native/JNI 场景。
+仅验证 APK 元数据解析和 Android worker 启动时，显式运行 `apkStartupIntegration`，并提供 `-PstartupApk=/absolute/path/to/original.apk` 与依赖仓库参数。该测试只传见证 classes 目录，记录实际 parser 类资源来源和完整资源列表，独立读取 worker 写出的随机内容见证；不执行 native/JNI 场景。
 
 构建使用 Gradle 9.5.0 官方 wrapper，发行下载校验由 wrapper 处理。
 

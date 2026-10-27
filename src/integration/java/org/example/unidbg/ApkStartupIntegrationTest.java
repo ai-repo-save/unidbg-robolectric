@@ -43,9 +43,10 @@ public final class ApkStartupIntegrationTest {
         }
         assertEquals(nonce, Files.readString(evidence.resolve("startup.bin")));
         JsonNode observed = JSON.readTree(evidence.resolve("startup.json").toFile());
-        String source = runtime.resolve("lib/apk-parser-2.6.11.jar").toUri().toURL().toString();
-        assertEquals(source, observed.required("parser_source").asText());
-        assertEquals(JSON.valueToTree(List.of("jar:" + source + "!/net/dongliu/apk/parser/ApkFile.class")),
+        String source = "jar:" + runtime.resolve("lib/apk-parser-2.6.11.jar").toUri().toURL()
+                + "!/net/dongliu/apk/parser/ApkFile.class";
+        assertEquals(source, observed.required("parser_class_resource").asText());
+        assertEquals(JSON.valueToTree(List.of(source)),
                 observed.required("parser_resources"));
     }
 
@@ -53,7 +54,7 @@ public final class ApkStartupIntegrationTest {
         @Override public JsonNode run(WorkerSession session, JsonNode arguments) throws Exception {
             var observed = JSON.createObjectNode();
             observed.put("application_package", session.application().getPackageName());
-            observed.put("parser_source", ApkFile.class.getProtectionDomain().getCodeSource().getLocation().toString());
+            observed.put("parser_class_resource", ApkFile.class.getResource("ApkFile.class").toString());
             var resources = observed.putArray("parser_resources");
             for (var resource : Collections.list(getClass().getClassLoader().getResources("net/dongliu/apk/parser/ApkFile.class"))) {
                 resources.add(resource.toString());
