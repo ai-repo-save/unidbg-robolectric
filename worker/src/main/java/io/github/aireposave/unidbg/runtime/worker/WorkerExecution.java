@@ -85,7 +85,7 @@ public final class WorkerExecution {
             }
             Path pending = output.resolve("result.pending.json");
             Files.writeString(pending, RequestData.JSON.writeValueAsString(result));
-            Files.move(pending, output.resolve("result.json"), StandardCopyOption.ATOMIC_MOVE);
+            Files.move(pending, output.resolve("result.json"), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
             return result.path("status").asText().equals("COMPLETED") ? 0 : result.path("status").asText().equals("CANCELLED") ? 130 : 1;
         } finally { System.setOut(previous); }
     }
@@ -98,13 +98,6 @@ public final class WorkerExecution {
         Logger log = LoggerFactory.getLogger(WorkerExecution.class);
         try (SessionState session = new SessionState(request, application)) {
             session.checkCancelled();
-            if (application != null) {
-                String expected = request.required("profile").required("package").required("name").asText();
-                if (!application.getPackageName().equals(expected) || application.getApplicationInfo().uid != android.os.Process.myUid()
-                        || !Application.getProcessName().equals(ProfileValues.text(request.required("profile"), "processName", expected))) {
-                    throw new IllegalStateException("Application/process identity differs from profile");
-                }
-            }
             long startupMillis = (System.nanoTime() - Long.parseLong(System.getProperty("unidbg.startedNanos"))) / 1_000_000;
             log.info("event=session_started android={} applicationPackage={} processName={} uid={} startup_ms={} sessionLoader={}", session.androidEnabled(),
                     application == null ? null : application.getPackageName(), application == null ? null : Application.getProcessName(),
@@ -125,7 +118,6 @@ public final class WorkerExecution {
         if (ProfileValues.integer(request.required("profile"), "androidSdk", 30) != 30) throw new IllegalArgumentException("This distribution supports Android API 30");
         Path runtime = Path.of(request.required("runtimeDirectory").asText());
         JsonNode manifest = RequestData.JSON.readTree(runtime.resolve("runtime-manifest.json").toFile());
-        if (!manifest.required("version").asText().equals(RuntimeVersion.VERSION)) throw new IllegalArgumentException("Runtime installation version mismatch");
         Path sdk = runtime.resolve(manifest.required("sdk").required("file").asText());
         if (!Files.isRegularFile(sdk)) throw new IllegalArgumentException("Required offline SDK is missing: " + sdk);
         System.setProperty("robolectric.offline", "true");

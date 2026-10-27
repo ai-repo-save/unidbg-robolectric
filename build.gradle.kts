@@ -182,5 +182,22 @@ tasks.register<Test>("apkStartupIntegration") {
     testLogging { events("passed", "failed"); showExceptions = true; showStackTraces = true }
 }
 
+tasks.register<Test>("outputReuseIntegration") {
+    group = "verification"
+    description = "Explicit worker output directory reuse through the client and CLI."
+    dependsOn(":worker:installDist")
+    testClassesDirs = integration.output.classesDirs
+    classpath = integration.runtimeClasspath
+    useJUnit()
+    filter { includeTestsMatching("org.example.unidbg.OutputReuseIntegrationTest") }
+    outputs.upToDateWhen { false }
+    reports.junitXml.outputLocation.set(layout.buildDirectory.dir("evidence/$runId/output-reuse/xml"))
+    reports.html.outputLocation.set(layout.buildDirectory.dir("evidence/$runId/output-reuse/html"))
+    systemProperty("integration.runtime", project(":worker").layout.buildDirectory.dir("install/unidbg-worker").get().asFile.absolutePath)
+    systemProperty("integration.evidenceDir", layout.buildDirectory.dir("evidence/$runId/output-reuse/artifacts").get().asFile.absolutePath)
+    doFirst { systemProperty("integration.fixtureClasspath", integration.output.asPath) }
+    testLogging { events("passed", "failed"); showExceptions = true; showStackTraces = true }
+}
+
 apply(from = "gradle/release.gradle.kts")
 apply(from = "gradle/development.gradle.kts")

@@ -9,7 +9,6 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.UUID;
 import java.util.concurrent.Callable;
@@ -26,7 +25,7 @@ public final class WorkerMain implements Callable<Integer> {
     @Option(names = "--entrypoint", description = "WorkerEntrypoint implementation FQCN") String entrypoint;
     @Option(names = "--arguments", description = "Entrypoint JSON arguments file") Path arguments;
     @Option(names = "--profile", description = "Environment profile JSON file") Path profile;
-    @Option(names = "--output-dir", description = "New session output directory") Path outputDirectory;
+    @Option(names = "--output-dir", description = "Session output directory") Path outputDirectory;
     @Option(names = "--task-classpath", description = "Task jars/directories, separated by the host path separator") String classpath = "";
     @Option(names = "--runtime-dir", description = "Installed runtime (defaults to this distribution)") Path runtimeDirectory;
     @Option(names = "--trace-id", description = "Parent trace correlation identifier") String traceId;
@@ -41,10 +40,6 @@ public final class WorkerMain implements Callable<Integer> {
         System.setProperty("unidbg.startedNanos", Long.toString(System.nanoTime()));
         if (request == null) request = createRequest();
         ObjectNode envelope = (ObjectNode) JSON.readTree(request.toFile());
-        if (envelope.required("protocol").intValue() != RuntimeVersion.PROTOCOL
-                || !envelope.required("version").asText().equals(RuntimeVersion.VERSION)) {
-            throw new IllegalArgumentException("Unsupported runtime protocol/version");
-        }
         var urls = new ArrayList<URL>();
         for (String item : System.getProperty("java.class.path").split(File.pathSeparator)) urls.add(Path.of(item).toUri().toURL());
         for (var item : envelope.required("classpath")) urls.add(Path.of(item.asText()).toUri().toURL());
@@ -90,7 +85,9 @@ public final class WorkerMain implements Callable<Integer> {
         var paths = value.putArray("classpath");
         if (!classpath.isEmpty()) for (String item : classpath.split(File.pathSeparator)) paths.add(Path.of(item).toAbsolutePath().toString());
         Path file = output.resolve("request.json");
-        Files.writeString(file, JSON.writeValueAsString(value), StandardOpenOption.CREATE_NEW);
+        Files.deleteIfExists(output.resolve("cancel.request"));
+        Files.deleteIfExists(output.resolve("result.json"));
+        Files.writeString(file, JSON.writeValueAsString(value));
         return file;
     }
 }

@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.UUID;
 
@@ -30,7 +29,9 @@ public final class RuntimeClient {
         var classpath = envelope.putArray("classpath");
         request.classpath().forEach(path -> classpath.add(path.toAbsolutePath().toString()));
         Path input = output.resolve("request.json");
-        Files.writeString(input, JSON.writeValueAsString(envelope), StandardOpenOption.CREATE_NEW);
+        Files.deleteIfExists(output.resolve("cancel.request"));
+        Files.deleteIfExists(output.resolve("result.json"));
+        Files.writeString(input, JSON.writeValueAsString(envelope));
         var command = new ArrayList<String>();
         command.add(Path.of(System.getProperty("java.home"), "bin", "java").toString());
         command.addAll(Files.readAllLines(request.runtimeDirectory().resolve("jvm-args.txt")));

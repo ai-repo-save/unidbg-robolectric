@@ -55,7 +55,7 @@ APK 元数据解析使用 `io.github.ai-repo-save.apk-parser:apk-parser:2.6.11`�
 ./gradlew --offline --no-daemon jniIntegration
 ```
 
-会话启动检查 API 版本、所选 SDK 和必需文件。runtime-manifest 记录版本、源码 Git 提交、两个 Robolectric fork 制品坐标、完整运行依赖、JDK/API 和 SDK 路径等构建事实。Gradle/Maven 负责依赖下载及其自身校验。
+Android 会话启动使用离线 API 30 SDK。runtime-manifest 记录版本、源码 Git 提交、两个 Robolectric fork 制品坐标、完整运行依赖、JDK/API 和 SDK 路径等构建事实。Gradle/Maven 负责依赖下载及其自身校验。
 
 `jniIntegration` 是发行整体集成入口，不进入默认 test/check。每次运行重新执行，XML/HTML 与工作会话产物保存在独立 `build/1.2.2/evidence/<UTC 时间>/`。运行日志为 stderr 和每会话 `logs/worker.jsonl`；原始诊断、完整工作 JVM maps、Android 数据副本与结果文件分别保存。证据保留到显式 clean；活动 worker 期间不 clean 或覆盖安装。
 
