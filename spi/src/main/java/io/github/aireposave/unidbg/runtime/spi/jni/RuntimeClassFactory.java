@@ -15,10 +15,7 @@ public final class RuntimeClassFactory extends ProxyClassFactory {
     public RuntimeClassFactory(ClassLoader androidLoader, JniConfiguration configuration) {
         super(androidLoader);
         this.configuration = configuration;
-        for (String owner : configuration.proxyOwners()) {
-            try { androidLoader.loadClass(owner.replace('/', '.')); }
-            catch (ClassNotFoundException failure) { throw new IllegalArgumentException("Registered proxy owner has no Java implementation: " + owner, failure); }
-        }
+
     }
 
     public HostJni jni() {

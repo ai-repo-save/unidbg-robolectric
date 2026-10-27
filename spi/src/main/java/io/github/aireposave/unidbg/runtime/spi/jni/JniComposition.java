@@ -7,19 +7,19 @@ import com.github.unidbg.linux.android.dvm.DvmMethod;
 import com.github.unidbg.linux.android.dvm.DvmObject;
 import com.github.unidbg.linux.android.dvm.HostJni;
 import com.github.unidbg.linux.android.dvm.Jni;
-import com.github.unidbg.linux.android.dvm.JniCallPlan;
 import com.github.unidbg.linux.android.dvm.VaList;
 import com.github.unidbg.linux.android.dvm.VarArg;
-import java.lang.invoke.MethodType;
+import java.util.function.Function;
+import com.github.unidbg.thread.ThreadContextSwitchException;
+import com.github.unidbg.linux.android.dvm.jni.ProxyTargetException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
-import org.apache.commons.lang3.ClassUtils;
 
 /** Configured routing is bound on the backend; only the selected host operation is offloaded. */
 final class JniComposition {
     @FunctionalInterface
-    private interface HostBinding { JniCallPlan bind(HostJni provider) throws Throwable; }
+    private interface HostBinding { Object invoke(HostJni provider, HostJni.Completion completion) throws Throwable; }
 
     static HostJni wrap(HostJni delegate, JniConfiguration configuration) {
         return (HostJni) Proxy.newProxyInstance(HostJni.class.getClassLoader(), new Class<?>[] {HostJni.class},
@@ -33,7 +33,7 @@ final class JniComposition {
                         };
                     }
                     if (method.getDeclaringClass() == HostJni.class) {
-                        if (method.getName().equals("planException")) return reflected(delegate, method, arguments);
+                        if (method.getName().equals("invokeException")) return reflected(delegate, method, arguments);
                         return bind(delegate, configuration, method.getName(), arguments);
                     }
                     return metadata(delegate, configuration, method, arguments);
@@ -45,16 +45,37 @@ final class JniComposition {
         catch (InvocationTargetException failure) { throw failure.getCause(); }
     }
 
-    private static JniCall call(HostJni delegate, Method operation, String signature, Object[] arguments, HostBinding binding) {
+    private static JniCall call(HostJni delegate, Method operation, String signature, Object[] arguments,
+                                HostBinding binding, Function<Jni, Object> backend, HostJni.Completion completion) {
         return new JniCall(operation, signature, arguments, delegate, provider -> provider instanceof HostJni host
-                ? binding.bind(host) : JniCallPlan.backend(provider));
+                ? binding.invoke(host, completion) : backend.apply(provider));
     }
 
-    private static JniCallPlan bind(HostJni delegate, JniConfiguration configuration, String name, Object[] args) throws Exception {
+    @SuppressWarnings("unchecked")
+    private static Object bind(HostJni delegate, JniConfiguration configuration, String name, Object[] args) throws Throwable {
         DvmClass type = (DvmClass) args[0];
+        Function<Jni, Object> backend = (Function<Jni, Object>) args[args.length - 2];
+        HostJni.Completion completion = (HostJni.Completion) args[args.length - 1];
+        JniCall[] context = new JniCall[1];
+        HostJni.Completion observed = new HostJni.Completion() {
+            @Override public void complete(Object value, Throwable failure, boolean targetThrown) {
+                if (failure == null) {
+                    try { after(configuration, context[0], value); }
+                    catch (Throwable observerFailure) {
+                        completion.complete(null, observerFailure, false);
+                        return;
+                    }
+                } else failed(configuration, context[0], failure, targetThrown);
+                completion.complete(value, failure, targetThrown);
+            }
+            @Override public void cancelled(Throwable cancellation) {
+                failed(configuration, context[0], cancellation, false);
+                completion.cancelled(cancellation);
+            }
+        };
         JniCall call;
         switch (name) {
-            case "planMethod" -> {
+            case "invokeMethod" -> {
                 DvmObject<?> receiver = (DvmObject<?>) args[1];
                 DvmMethod member = (DvmMethod) args[2];
                 VarArg values = (VarArg) args[3];
@@ -65,23 +86,23 @@ final class JniComposition {
                 Method operation = Jni.class.getMethod("call" + (stat ? "Static" : "") + result + "Method" + (variadic ? "V" : ""),
                         BaseVM.class, stat ? DvmClass.class : DvmObject.class, DvmMethod.class, variadic ? VaList.class : VarArg.class);
                 call = call(delegate, operation, member.getSignature(), new Object[] {type.vm, stat ? type : receiver, member, values},
-                        provider -> provider.planMethod(type, receiver, member, values, stat));
+                        (provider, completed) -> provider.invokeMethod(type, receiver, member, values, stat, backend, completed), backend, observed);
             }
-            case "planConstructor" -> {
+            case "invokeConstructor" -> {
                 DvmMethod member = (DvmMethod) args[1];
                 VarArg values = (VarArg) args[2];
                 boolean variadic = values instanceof VaList;
                 Method operation = Jni.class.getMethod("newObject" + (variadic ? "V" : ""), BaseVM.class, DvmClass.class,
                         DvmMethod.class, variadic ? VaList.class : VarArg.class);
                 call = call(delegate, operation, member.getSignature(), new Object[] {type.vm, type, member, values},
-                        provider -> provider.planConstructor(type, member, values));
+                        (provider, completed) -> provider.invokeConstructor(type, member, values, backend, completed), backend, observed);
             }
-            case "planAllocation" -> {
+            case "invokeAllocation" -> {
                 String signature = type.getClassName() + "->allocObject";
                 Method operation = Jni.class.getMethod("allocObject", BaseVM.class, DvmClass.class, String.class);
-                call = call(delegate, operation, signature, new Object[] {type.vm, type, signature}, provider -> provider.planAllocation(type));
+                call = call(delegate, operation, signature, new Object[] {type.vm, type, signature}, (provider, completed) -> provider.invokeAllocation(type, backend, completed), backend, observed);
             }
-            case "planField" -> {
+            case "invokeField" -> {
                 DvmObject<?> receiver = (DvmObject<?>) args[1];
                 DvmField member = (DvmField) args[2];
                 boolean stat = (Boolean) args[3], write = (Boolean) args[4];
@@ -95,45 +116,45 @@ final class JniComposition {
                 Object[] original = write ? new Object[] {type.vm, stat ? type : receiver, member, value}
                         : new Object[] {type.vm, stat ? type : receiver, member};
                 String signature = member.getDvmClass().getClassName() + "->" + member.getFieldName() + ":" + member.getFieldType();
-                call = call(delegate, operation, signature, original, provider -> provider.planField(type, receiver, member, stat, write, value));
+                call = call(delegate, operation, signature, original, (provider, completed) -> provider.invokeField(type, receiver, member, stat, write, value, backend, completed), backend, observed);
             }
             default -> throw new IllegalArgumentException("Unknown host binding operation: " + name);
         }
-        try { before(configuration, call); }
-        catch (Throwable failure) { return JniCallPlan.failure(failure, false); }
-        JniCallPlan plan;
+        context[0] = call;
+        Object result;
         try {
+            before(configuration, call);
             var handler = configuration.handler(call.signature());
             Jni owner = configuration.ownerDelegate(owner(call.signature()));
-            if (handler != null) plan = handler.plan(call);
-            else if (owner != null) plan = call.invoke(owner);
-            else if (configuration.proxyOwners().contains(owner(call.signature())) || frameworkMember(call.signature(), call.arguments())) plan = call.proceed();
-            else throw new UnsupportedOperationException("Unregistered business JNI: " + call.signature());
+            if (handler != null) result = handler.invoke(call);
+            else if (owner != null) result = call.invoke(owner);
+            else result = call.proceed();
+        } catch (ThreadContextSwitchException suspended) {
+            throw suspended;
+        } catch (ProxyTargetException failure) {
+            failed(configuration, call, failure.target(), true);
+            throw failure;
         } catch (Throwable failure) {
             failed(configuration, call, failure, false);
-            return JniCallPlan.failure(failure, false);
+            throw failure;
         }
-        return plan.observe(new JniCallPlan.Observer() {
-            @Override public void completed(Object normalized) throws Throwable { after(configuration, call, normalized); }
-            @Override public void failed(Throwable original, boolean targetThrown) { JniComposition.failed(configuration, call, original, targetThrown); }
-        });
+        after(configuration, call, result);
+        return result;
     }
 
     private static Object metadata(HostJni delegate, JniConfiguration configuration, Method operation, Object[] arguments) throws Throwable {
         String signature = signature(arguments);
         JniCall call = new JniCall(operation, signature, arguments, delegate,
-                provider -> JniCallPlan.backend(provider));
-        before(configuration, call);
+                provider -> reflected(provider, operation, arguments));
         Object result;
         try {
+            before(configuration, call);
             Jni owner = configuration.ownerDelegate(owner(signature));
             boolean accepted = configuration.handler(signature) != null || owner != null;
-            boolean proxy = configuration.proxyOwners().contains(owner(signature)) || frameworkMember(signature, arguments);
             if (operation.getName().equals("acceptMethod") || operation.getName().equals("acceptField")) {
-                result = accepted || (proxy && (boolean) reflected(delegate, operation, arguments));
+                result = accepted || (boolean) reflected(delegate, operation, arguments);
             } else if (owner != null) result = reflected(owner, operation, arguments);
-            else if (proxy) result = reflected(delegate, operation, arguments);
-            else throw new UnsupportedOperationException("Unregistered business JNI metadata: " + signature);
+            else result = reflected(delegate, operation, arguments);
         } catch (Throwable failure) {
             failed(configuration, call, failure, false);
             throw failure;
@@ -176,29 +197,5 @@ final class JniComposition {
             if (argument instanceof String text) return text;
         }
         throw new IllegalArgumentException("JNI operation has no member descriptor");
-    }
-    private static boolean frameworkMember(String signature, Object[] arguments) {
-        if (standard(signature)) return true;
-        Class<?> host = null;
-        for (Object argument : arguments) {
-            DvmClass type = argument instanceof DvmClass clazz ? clazz : argument instanceof DvmObject<?> object ? object.getObjectType() : null;
-            if (type != null && type.getValue() instanceof Class<?> value) { host = value; break; }
-        }
-        String member = signature.substring(signature.indexOf("->") + 2);
-        if (host == null || member.startsWith("<init>")) return false;
-        for (Class<?> parent : ClassUtils.hierarchy(host, ClassUtils.Interfaces.INCLUDE)) {
-            if (!standard(parent.getName().replace('.', '/') + "->")) continue;
-            for (Method candidate : parent.getMethods()) {
-                String descriptor = candidate.getName() + MethodType.methodType(candidate.getReturnType(), candidate.getParameterTypes()).descriptorString();
-                if (descriptor.equals(member)) return true;
-            }
-            for (var candidate : parent.getFields()) if ((candidate.getName() + ":" + candidate.getType().descriptorString()).equals(member)) return true;
-        }
-        return false;
-    }
-    private static boolean standard(String signature) {
-        return signature.startsWith("android/") || signature.startsWith("java/") || signature.startsWith("javax/")
-                || signature.startsWith("dalvik/") || signature.startsWith("libcore/") || signature.startsWith("org/json/")
-                || signature.startsWith("com/android/");
     }
 }

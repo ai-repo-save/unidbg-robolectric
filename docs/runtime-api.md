@@ -40,24 +40,23 @@ JNI 回调通过 `ProxyDvmObject.unpack(DvmObject<?>)` 取得宿主值，复用�
 
 ```java
 var jni = new JniConfiguration()
-    .handle("java/lang/System->currentTimeMillis()J", call -> JniCallPlan.value(configuredMillis))
+    .handle("java/lang/System->currentTimeMillis()J", call -> configuredMillis)
     .businessOwner("com/example/NativeCallback", businessJni)
-    .proxyOwner("com/example/ActualJavaCallback")
     .observe(event -> record(event));
 session.configureVm(vm, jni);
 ```
 
-顺序为 exact descriptor handler、已注册业务 owner delegate、显式 proxyOwner 与标准 Android/Java Proxy、未知拒绝。`proxyOwner(String internalClassName)` 用于当前 worker 中确有 Java 实现的已知业务类；元数据与调用都使用库已有 Proxy，配置时验证类可加载。owner 使用 JNI internal name，不提供全局 catch-all 或 businessOwner 对 Android/Java owner 的覆盖。元数据 acceptMethod/acceptField 只返回是否接受，不执行结果 handler。
+路由顺序为精确描述符 handler、已注册 owner delegate、默认 Proxy。owner 使用 JNI internal name。
 
-`Handler.plan(JniCall)`、`JniCall.proceed()`、`invoke(Jni)` 和 `Continuation.plan(Jni)` 返回底座 `JniCallPlan`。`method()` 保留原 `Jni.class` Method 与 overload，`signature()` 和 `arguments()` 保留本次成员与解码参数。ordinary 调用使用普通 modeled callback，V/A 使用 `*V`。`proceed()` 绑定标准 Proxy；`invoke(provider)` 绑定指定 provider，保留 HostJni 能力，modeled provider 在 backend 执行。VM 与 class provider 的组合均暴露 HostJni。
+`Handler.invoke(JniCall)` 同步返回 JNI 值：对象为 `DvmObject`，基本类型为对应包装类型，void 为 null。handler 按条件以 `return call.proceed()` 尾委派默认 Proxy，或以 `return call.invoke(provider)` 尾委派指定 provider。`method()` 保留原 `Jni.class` Method 与重载，`signature()` 和 `arguments()` 保留本次成员与解码参数。ordinary 调用使用普通 modeled callback，V/A 使用 `*V`。
 
-所有 plan 节点属于同一次 JNI 成员、operation、参数与返回类型。`backend(provider)` 执行本次 modeled callback；`host(Callable<?>)` 只持有宿主值；`value(normalized)` 接收 DvmObject、primitive wrapper 或 void null；`failure(original, targetThrown)` 显式传递失败。`then(success)` 变换结果，`then(success, failure)` 显式恢复或继续失败。continuation 在 backend 执行，返回同一个底座 DTO；runtime 不执行计划，不阻塞等待宿主线程。HOST 的结果由底座先规范化，VALUE/BACKEND 结果已经规范化。调用者不能将 raw host object 或 native handle 传给 `value`。
+modeled `Jni` 在 backend 执行。`HostJni` 在 backend 解析成员并提取宿主参数，通过既有 `GuestJavaRuntime.submit` 和单次 `GuestJavaWaiter.suspend` 执行宿主操作。completion 回到 backend 后转换宿主结果并写入 JNI 返回值。对象转换保留宿主对象身份。宿主 getter 使用 backend 初始化时捕获的 profile、路径和 classloader；宿主线程不绑定 `WorkerSession`。
 
-Event 提供 `phase()`（BEFORE / AFTER / FAILED）、`call()`、`result()`、`failure()` 和 `targetThrown()`。BEFORE 在 backend 绑定时执行，失败直接返回 `failure(original, false)`，不执行 operation、AFTER 或 FAILED。Handler 绑定失败通知 FAILED 后返回同一原始失败。正常完成才通知 AFTER；其 result 为原 JNI 类型。目标 Java 异常的 FAILED 保留原 Throwable 与 `targetThrown=true`，底座按最终未恢复结果安装 JNI pending exception。BEFORE、AFTER 与 continuation 异常属于 backend 失败。FAILED observer 异常附入原失败的 suppressed，不恢复失败。`observe` 只通知；显式恢复使用 `then` 的 failure 分支。Handler 内恢复成功后，组合观察器看到最终 AFTER。
+Event 提供 `phase()`（BEFORE / AFTER / FAILED）、`call()`、`result()`、`failure()` 和 `targetThrown()`。事件均在 backend 执行。BEFORE 可调用 `WorkerSession.checkCancelled()`；抛出异常时通知 FAILED 并终止该次操作。正常完成通知 AFTER，result 为 JNI 值。目标 Java 异常通知 FAILED，保留原 Throwable 和 `targetThrown=true`，底座将原异常设为 JNI pending exception。同步 handler 可抛出 `ProxyTargetException(original)` 表达同一结果。BEFORE、handler、宿主桥和 AFTER 的其他异常按原失败传播。FAILED observer 抛出的异常附入原失败的 suppressed。等待取消时通知 FAILED。
 
-acceptMethod/acceptField 是独立同步元数据操作，其 result 为 boolean；结果 handler 不处理元数据查询。toReflectedMethod 按 owner / Proxy 路由同步元数据，不执行结果 handler。需要成员值的观察器按 `call.method()` 选择 getter/call 操作。ThrowNew 的 `planException` 直接转发标准 HostJni，不伪造原 Jni Method，也不扩大配置与观察器覆盖范围。标准成员识别覆盖公开接口与父类。宿主 getter 使用 backend 初始化时捕获的 profile、路径和 classloader；宿主线程不绑定 WorkerSession。
+acceptMethod/acceptField 是同步元数据操作，result 为 boolean；精确 handler 或 owner 注册可接受对应成员，其余查询默认 Proxy。toReflectedMethod 按 owner / Proxy 同步路由。结果 handler 处理成员调用与字段访问，观察器通过 `call.method()` 区分元数据操作。ThrowNew 的 `invokeException` 直接转发标准 HostJni。
 
-所有配置必须在解析业务类和执行 native 初始化之前完成。不要再反射修改 VM/class/method maps。
+在解析业务类和执行 native 初始化之前配置 JNI。
 
 ## 未发布底座开发消费
 
@@ -76,11 +75,11 @@ acceptMethod/acceptField 是独立同步元数据操作，其 result 为 boolean
   developmentJniIntegration
 ```
 
-`developmentCoreClasspath` 指向底座构建输出的 classpath 文件，内容为平台路径分隔符连接的目录和 JAR 路径。核心目录名为对应模块名；依赖 JAR 使用相邻 Maven POM 中的坐标。底座 classpath 包含消费者依赖时，`developmentConsumerClasspath` 指定该消费者的 classpath 文件，由 runtime 自身的依赖声明替代这些依赖。Gradle 排除已发布的同名核心模块，使用选定的核心 classes。
+`developmentCoreClasspath` 指向底座构建输出的 classpath 文件，内容为平台路径分隔符连接的目录和 JAR 路径。目录作为核心 classes 打包，依赖 JAR 使用相邻 Maven POM 中的坐标。底座 classpath 包含消费者依赖时，`developmentConsumerClasspath` 指定该消费者的 classpath 文件，由 runtime 自身的依赖声明替代这些依赖。Gradle 排除已发布的同名核心模块，使用选定的核心 classes。
 
 各模块开发输出位于自身的 `build/development/`。`developmentInstall` 调用 `:worker:installDist`，安装目录为 `worker/build/development/install/unidbg-worker/`。消费者通过 `-PruntimeDevelopmentDirectory=/absolute/unidbg-worker` 使用安装目录中的 `lib/*.jar` 编译。
 
-`developmentJniIntegration` 仅显式执行现有单项 lifecycle/JNI 集成，不加入默认测试集。它使用真实子进程，覆盖 worker 隔离、持久通道、取消与资源关闭，同时验证 ordinary/A 的 modeled overload、HostJni owner、Host→Host continuation、失败恢复、规范化观察值与无 WorkerSession 的宿主 getter。
+`developmentJniIntegration` 仅显式执行现有单项 lifecycle/JNI 集成，不加入默认测试集。它使用真实子进程，覆盖 worker 隔离、持久通道、取消与资源关闭，同时验证 ordinary/A 的 modeled overload、HostJni owner、原目标异常、JNI 观察值与无 WorkerSession 的宿主 getter。
 
 ## Profile
 
@@ -120,10 +119,10 @@ Build 支持 MODEL / MANUFACTURER / BRAND / DEVICE / PRODUCT / BOARD / HARDWARE 
 ```sh
 bin/unidbg-worker --mode ANDROID --entrypoint com.example.Task \
   --task-classpath /absolute/task.jar --arguments /absolute/arguments.json \
-  --profile /absolute/profile.json --output-dir /absolute/new-session
+  --profile /absolute/profile.json --output-dir /absolute/session
 ```
 
-`--mode` 为 ANDROID 或 NATIVE_ONLY。会话启动检查 API 版本及所选 SDK 的必需文件，安装 manifest 记录版本、源码提交、依赖坐标和配置路径等构建事实。直接 CLI 使用调用进程的真实 cwd；在启动前由 shell、Python 或 ProcessBuilder 设置，不通过修改 user.dir 冒充 chdir。`--request` 接收 client 生成的协议 JSON。`--help`、`--version` 无任务副作用。
+`--mode` 为 ANDROID 或 NATIVE_ONLY。Android 模式使用离线 API 30 SDK，安装 manifest 记录版本、源码提交、依赖坐标和配置路径等构建事实。直接 CLI 使用调用进程的真实 cwd；在启动前由 shell、Python 或 ProcessBuilder 设置，不通过修改 user.dir 冒充 chdir。`--request` 接收 client 生成的协议 JSON。`--help`、`--version` 无任务副作用。
 
 `DirectMainEntrypoint` 的 arguments 为 `{"mainClass":"com.example.Main","arguments":["arg"]}`。它在同一执行域调用原 main，stdout 为原有机器数据，库日志保持 stderr；原 main 必须 return，不能调用 System.exit。
 
