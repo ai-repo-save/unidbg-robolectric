@@ -24,6 +24,7 @@ final class Arm64Jni implements AutoCloseable {
     private static final int JNI_GET_STATIC_METHOD_ID = 113;
     private static final int JNI_CALL_STATIC_OBJECT_METHOD_A = 116;
     private static final int JNI_CALL_STATIC_BOOLEAN_METHOD_A = 119;
+    private static final int JNI_CALL_STATIC_LONG_METHOD = 132;
     private static final int JNI_CALL_STATIC_LONG_METHOD_A = 134;
     private static final int JNI_GET_STATIC_FIELD_ID = 144;
     private static final int JNI_GET_STATIC_OBJECT_FIELD = 145;
@@ -91,6 +92,16 @@ final class Arm64Jni implements AutoCloseable {
         int type = type(typeName);
         return invoke(JNI_CALL_STATIC_BOOLEAN_METHOD_A, env, type,
                 member(type, JNI_GET_STATIC_METHOD_ID, name, descriptor), arguments(args)) == VM.JNI_TRUE;
+    }
+
+    long staticLongCallOrdinary(String typeName, String name, String descriptor, int... args) {
+        int type = type(typeName);
+        var ordinary = new java.util.ArrayList<Object>();
+        ordinary.add(env);
+        ordinary.add(type);
+        ordinary.add(member(type, JNI_GET_STATIC_METHOD_ID, name, descriptor));
+        for (int argument : args) ordinary.add(argument);
+        return callNative(JNI_CALL_STATIC_LONG_METHOD, ordinary.toArray()).longValue();
     }
 
     long staticLongCall(String typeName, String name, String descriptor, int... args) {

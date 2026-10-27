@@ -1,6 +1,7 @@
 package io.github.aireposave.unidbg.runtime.spi.jni;
 
 import com.github.unidbg.linux.android.dvm.Jni;
+import com.github.unidbg.linux.android.dvm.JniCallPlan;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.ArrayList;
@@ -53,9 +54,9 @@ public final class JniConfiguration {
     public List<Observer> observers() { return List.copyOf(observers); }
 
     @FunctionalInterface
-    public interface Handler { Object invoke(JniCall call) throws Throwable; }
+    public interface Handler { JniCallPlan plan(JniCall call) throws Throwable; }
     @FunctionalInterface
     public interface Observer { void observe(Event event) throws Throwable; }
     public enum Phase { BEFORE, AFTER, FAILED }
-    public record Event(Phase phase, JniCall call, Object result, Throwable failure) {}
+    public record Event(Phase phase, JniCall call, Object result, Throwable failure, boolean targetThrown) {}
 }

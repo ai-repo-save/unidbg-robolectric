@@ -9,7 +9,10 @@
 !/gradlew
 !/gradlew.bat
 !/gradle/
-!/gradle/**
+!/gradle/release.gradle.kts
+!/gradle/development.gradle.kts
+!/gradle/wrapper/
+!/gradle/wrapper/**
 !/src/
 !/src/**
 !/client/

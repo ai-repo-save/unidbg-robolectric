@@ -2,7 +2,7 @@ package io.github.aireposave.unidbg.runtime.spi.jni;
 
 import com.github.unidbg.linux.android.dvm.BaseVM;
 import com.github.unidbg.linux.android.dvm.DvmClass;
-import com.github.unidbg.linux.android.dvm.Jni;
+import com.github.unidbg.linux.android.dvm.HostJni;
 import com.github.unidbg.linux.android.dvm.jni.ProxyClassFactory;
 import com.github.unidbg.linux.android.dvm.jni.ProxyClassLoader;
 import com.github.unidbg.linux.android.dvm.jni.ProxyDvmClass;
@@ -21,7 +21,7 @@ public final class RuntimeClassFactory extends ProxyClassFactory {
         }
     }
 
-    public Jni jni() {
+    public HostJni jni() {
         return JniComposition.wrap(new ProxyJni(classLoader, visitor, null), configuration);
     }
 

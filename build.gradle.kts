@@ -183,3 +183,4 @@ tasks.register<Test>("apkStartupIntegration") {
 }
 
 apply(from = "gradle/release.gradle.kts")
+apply(from = "gradle/development.gradle.kts")

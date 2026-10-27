@@ -14,9 +14,14 @@ import com.github.unidbg.linux.android.dvm.AbstractJni;
 import com.github.unidbg.linux.android.dvm.BaseVM;
 import com.github.unidbg.linux.android.dvm.DvmClass;
 import com.github.unidbg.linux.android.dvm.DvmObject;
+import com.github.unidbg.linux.android.dvm.Jni;
+import com.github.unidbg.linux.android.dvm.HostJni;
+import com.github.unidbg.linux.android.dvm.JniCallPlan;
 import com.github.unidbg.linux.android.dvm.VarArg;
 import com.github.unidbg.linux.android.dvm.VaList;
 import com.github.unidbg.linux.android.dvm.jni.ProxyDvmObject;
+import com.github.unidbg.linux.android.dvm.jni.ProxyClassFactory;
+import com.github.unidbg.linux.android.dvm.jni.ProxyJni;
 import io.github.aireposave.unidbg.runtime.spi.WorkerEntrypoint;
 import io.github.aireposave.unidbg.runtime.spi.WorkerSession;
 import io.github.aireposave.unidbg.runtime.spi.jni.JniConfiguration;
@@ -92,7 +97,44 @@ public final class RuntimeFixture implements WorkerEntrypoint {
     }
 
     public static final class JavaCallback {
+        static final java.io.IOException FAILURE = new java.io.IOException("Target failure");
         public static String value() { return "java-owner"; }
+        public static long success(int value) { return value; }
+        public static long recover() throws java.io.IOException { throw FAILURE; }
+        public static long targetFailure() throws java.io.IOException { throw FAILURE; }
+    }
+
+    public static final class HostCallback {
+        public static String value() { return "host-owner"; }
+    }
+
+    private static final class HostOwnerFactory extends ProxyClassFactory {
+        HostOwnerFactory(ClassLoader loader) { super(loader); }
+        HostJni provider() { return new ProxyJni(classLoader, visitor, null); }
+    }
+
+    public static final class CapturedHost {
+        private final String model;
+        private final Path directory;
+        private final ClassLoader loader;
+        CapturedHost(WorkerSession session) {
+            model = session.profile().required("build").required("MODEL").asText();
+            directory = session.outputDirectory();
+            loader = getClass().getClassLoader();
+        }
+        public String getModel() throws java.io.IOException {
+            assertThrows(IllegalStateException.class, WorkerSession::current);
+            Files.writeString(directory.resolve("host-captured-model"), model);
+            return model;
+        }
+        public ClassLoader getClassLoader() {
+            assertThrows(IllegalStateException.class, WorkerSession::current);
+            return loader;
+        }
+        public java.io.File getCacheDir() {
+            assertThrows(IllegalStateException.class, WorkerSession::current);
+            return directory.resolve("host-cache").toFile();
+        }
     }
 
     private static JsonNode android(WorkerSession session, String label) throws Exception {
@@ -109,9 +151,45 @@ public final class RuntimeFixture implements WorkerEntrypoint {
         AndroidResolver resolver = new AndroidResolver(23);
         emulator.getMemory().setLibraryResolver(resolver);
         var vm = emulator.createDalvikVM();
+        Thread backend = Thread.currentThread();
+        String javaOwner = JavaCallback.class.getName().replace('.', '/');
+        String hostOwner = HostCallback.class.getName().replace('.', '/');
+        String capturedOwner = CapturedHost.class.getName().replace('.', '/');
+        CapturedHost captured = new CapturedHost(session);
+        var observerFailure = new java.io.IOException("Failed observer");
+        Jni modeled = new AbstractJni() {
+            @Override public long callStaticLongMethod(BaseVM target, DvmClass type, String signature, VarArg args) { return 17L; }
+            @Override public long callStaticLongMethodV(BaseVM target, DvmClass type, String signature, VaList args) { return 23L; }
+        };
         JniConfiguration configuration = new JniConfiguration()
-                .handle("java/lang/System->currentTimeMillis()J", call -> 1234567890123L)
-                .proxyOwner(JavaCallback.class.getName().replace('.', '/'))
+                .handle("java/lang/System->currentTimeMillis()J", call -> JniCallPlan.value(1234567890123L))
+                .proxyOwner(javaOwner)
+                .proxyOwner(capturedOwner)
+                .businessOwner(hostOwner, new HostOwnerFactory(RuntimeFixture.class.getClassLoader()).provider())
+                .businessOwner("example/Overload", modeled)
+                .handle("example/Overload->value()J", call -> {
+                    assertSame(Jni.class, call.method().getDeclaringClass());
+                    boolean variadic = call.arguments()[3] instanceof VaList;
+                    assertEquals(variadic ? "callStaticLongMethodV" : "callStaticLongMethod", call.method().getName());
+                    assertArrayEquals(new Class<?>[] {BaseVM.class, DvmClass.class, com.github.unidbg.linux.android.dvm.DvmMethod.class,
+                            variadic ? VaList.class : VarArg.class}, call.method().getParameterTypes());
+                    return call.invoke(modeled);
+                })
+                .handle(javaOwner + "->success(I)J", call -> call.proceed().then(normalized -> {
+                    assertSame(backend, Thread.currentThread());
+                    long value = (Long) normalized;
+                    return JniCallPlan.host(() -> value + 1);
+                }).then(normalized -> {
+                    assertSame(backend, Thread.currentThread());
+                    return JniCallPlan.value((Long) normalized * 2);
+                }))
+                .handle(javaOwner + "->recover()J", call -> call.proceed().then(JniCallPlan::value, (failure, targetThrown) -> {
+                    assertSame(backend, Thread.currentThread());
+                    assertSame(JavaCallback.FAILURE, failure);
+                    assertEquals(true, targetThrown);
+                    Files.writeString(session.outputDirectory().resolve("recovered-target"), failure.getMessage());
+                    return JniCallPlan.value(29L);
+                }))
                 .businessOwner("example/Callback", new AbstractJni() {
                     @Override public DvmObject<?> callStaticObjectMethod(BaseVM target, DvmClass type, String signature, VarArg args) {
                         if (signature.equals("example/Callback->owner()Ljava/lang/String;")) return ProxyDvmObject.createObject(target, "owner");
@@ -121,8 +199,15 @@ public final class RuntimeFixture implements WorkerEntrypoint {
                         return callStaticObjectMethod(target, type, signature, args);
                     }
                 })
-                .handle("example/Callback->exact()Ljava/lang/String;", call -> ProxyDvmObject.createObject(vm, "exact"))
+                .handle("example/Callback->exact()Ljava/lang/String;", call -> JniCallPlan.value(ProxyDvmObject.createObject(vm, "exact")))
                 .observe(event -> {
+                    assertSame(backend, Thread.currentThread());
+                    assertSame(session, WorkerSession.current());
+                    if (event.phase() == JniConfiguration.Phase.FAILED && event.call().signature().equals(javaOwner + "->targetFailure()J")) {
+                        assertSame(JavaCallback.FAILURE, event.failure());
+                        assertEquals(true, event.targetThrown());
+                        throw observerFailure;
+                    }
                     if (event.phase() == JniConfiguration.Phase.AFTER && event.call().method().getName().equals("getStaticObjectField")
                             && event.call().signature().equals("android/os/Build->MODEL:Ljava/lang/String;")) {
                         Files.writeString(session.outputDirectory().resolve("observed-model"), ((DvmObject<?>) event.result()).getValue().toString());
@@ -166,7 +251,25 @@ public final class RuntimeFixture implements WorkerEntrypoint {
             Context independent = application.createPackageContext(application.getPackageName(), 0);
             assertEquals(Map.of(KEY, "preference-" + label), independent.getSharedPreferences("jni-probe", 0).getAll());
             assertEquals(1234567890123L, jni.staticLongCall("java/lang/System", "currentTimeMillis", "()J"));
-            assertEquals("java-owner", jni.value(jni.staticObjectCall(JavaCallback.class.getName().replace('.', '/'), "value", "()Ljava/lang/String;")));
+            assertEquals("java-owner", jni.value(jni.staticObjectCall(javaOwner, "value", "()Ljava/lang/String;")));
+            assertEquals("host-owner", jni.value(jni.staticObjectCall(hostOwner, "value", "()Ljava/lang/String;")));
+            assertEquals(17L, jni.staticLongCallOrdinary("example/Overload", "value", "()J"));
+            assertEquals(23L, jni.staticLongCall("example/Overload", "value", "()J"));
+            assertEquals(44L, jni.staticLongCall(javaOwner, "success", "(I)J", 21));
+            assertEquals(29L, jni.staticLongCall(javaOwner, "recover", "()J"));
+            assertEquals("Target failure", Files.readString(session.outputDirectory().resolve("recovered-target")));
+            int hostObject = jni.wrap(captured);
+            String capturedModel = session.profile().required("build").required("MODEL").asText();
+            assertEquals(capturedModel, jni.value(jni.objectCall(hostObject, "getModel", "()Ljava/lang/String;")));
+            assertEquals(capturedModel, Files.readString(session.outputDirectory().resolve("host-captured-model")));
+            assertSame(RuntimeFixture.class.getClassLoader(), jni.value(jni.objectCall(hostObject, "getClassLoader", "()Ljava/lang/ClassLoader;")));
+            int cache = jni.objectCall(hostObject, "getCacheDir", "()Ljava/io/File;");
+            assertEquals(session.outputDirectory().resolve("host-cache").toString(), jni.value(jni.objectCall(cache, "getPath", "()Ljava/lang/String;")));
+            AssertionError target = assertThrows(AssertionError.class, () -> jni.staticLongCall(javaOwner, "targetFailure", "()J"));
+            assertSame(JavaCallback.FAILURE, target.getCause());
+            assertArrayEquals(new Throwable[] {observerFailure}, target.getCause().getSuppressed());
+            com.github.unidbg.Module.emulateFunction(emulator, com.github.unidbg.pointer.UnidbgPointer.nativeValue(
+                    vm.getJNIEnv().getPointer(0).getPointer(17L * Long.BYTES)), vm.getJNIEnv());
             var generator = java.security.KeyPairGenerator.getInstance("EC", "Conscrypt");
             generator.initialize(256);
             var publicKey = generator.generateKeyPair().getPublic();

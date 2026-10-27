@@ -40,7 +40,7 @@ JNI 回调通过 `ProxyDvmObject.unpack(DvmObject<?>)` 取得宿主值，复用�
 
 ```java
 var jni = new JniConfiguration()
-    .handle("java/lang/System->currentTimeMillis()J", call -> configuredMillis)
+    .handle("java/lang/System->currentTimeMillis()J", call -> JniCallPlan.value(configuredMillis))
     .businessOwner("com/example/NativeCallback", businessJni)
     .proxyOwner("com/example/ActualJavaCallback")
     .observe(event -> record(event));
@@ -49,9 +49,36 @@ session.configureVm(vm, jni);
 
 顺序为 exact descriptor handler、已注册业务 owner delegate、显式 proxyOwner 与标准 Android/Java Proxy、未知拒绝。`proxyOwner(String internalClassName)` 用于当前 worker 中确有 Java 实现的已知业务类；元数据与调用都使用库已有 Proxy，配置时验证类可加载。owner 使用 JNI internal name，不提供全局 catch-all 或 businessOwner 对 Android/Java owner 的覆盖。元数据 acceptMethod/acceptField 只返回是否接受，不执行结果 handler。
 
-`JniCall` 提供 `method()`、`signature()`、`arguments()`、`proceed()` 和 `invoke(Jni)`。`proceed()` 调用标准 Proxy；`invoke` 保持原 Jni overload，便于复用业务 AbstractJni。Event 有 `phase()`（BEFORE / AFTER / FAILED）、`call()`、`result()`、`failure()`。observer 不会因调用由 Proxy 命中而被绕过。acceptMethod/acceptField 是独立元数据操作，其 result 为 boolean；需要成员值的观察器按 call.method() 选择真实 getter/call 操作。标准成员识别覆盖公开接口与父类，不维护 provider 白名单。JNI 组合使用 JDK 接口 Proxy，没有额外字节码生成依赖。
+`Handler.plan(JniCall)`、`JniCall.proceed()`、`invoke(Jni)` 和 `Continuation.plan(Jni)` 返回底座 `JniCallPlan`。`method()` 保留原 `Jni.class` Method 与 overload，`signature()` 和 `arguments()` 保留本次成员与解码参数。ordinary 调用使用普通 modeled callback，V/A 使用 `*V`。`proceed()` 绑定标准 Proxy；`invoke(provider)` 绑定指定 provider，保留 HostJni 能力，modeled provider 在 backend 执行。VM 与 class provider 的组合均暴露 HostJni。
+
+所有 plan 节点属于同一次 JNI 成员、operation、参数与返回类型。`backend(provider)` 执行本次 modeled callback；`host(Callable<?>)` 只持有宿主值；`value(normalized)` 接收 DvmObject、primitive wrapper 或 void null；`failure(original, targetThrown)` 显式传递失败。`then(success)` 变换结果，`then(success, failure)` 显式恢复或继续失败。continuation 在 backend 执行，返回同一个底座 DTO；runtime 不执行计划，不阻塞等待宿主线程。HOST 的结果由底座先规范化，VALUE/BACKEND 结果已经规范化。调用者不能将 raw host object 或 native handle 传给 `value`。
+
+Event 提供 `phase()`（BEFORE / AFTER / FAILED）、`call()`、`result()`、`failure()` 和 `targetThrown()`。BEFORE 在 backend 绑定时执行，失败直接返回 `failure(original, false)`，不执行 operation、AFTER 或 FAILED。Handler 绑定失败通知 FAILED 后返回同一原始失败。正常完成才通知 AFTER；其 result 为原 JNI 类型。目标 Java 异常的 FAILED 保留原 Throwable 与 `targetThrown=true`，底座按最终未恢复结果安装 JNI pending exception。BEFORE、AFTER 与 continuation 异常属于 backend 失败。FAILED observer 异常附入原失败的 suppressed，不恢复失败。`observe` 只通知；显式恢复使用 `then` 的 failure 分支。Handler 内恢复成功后，组合观察器看到最终 AFTER。
+
+acceptMethod/acceptField 是独立同步元数据操作，其 result 为 boolean；结果 handler 不处理元数据查询。toReflectedMethod 按 owner / Proxy 路由同步元数据，不执行结果 handler。需要成员值的观察器按 `call.method()` 选择 getter/call 操作。ThrowNew 的 `planException` 直接转发标准 HostJni，不伪造原 Jni Method，也不扩大配置与观察器覆盖范围。标准成员识别覆盖公开接口与父类。宿主 getter 使用 backend 初始化时捕获的 profile、路径和 classloader；宿主线程不绑定 WorkerSession。
 
 所有配置必须在解析业务类和执行 native 初始化之前完成。不要再反射修改 VM/class/method maps。
+
+## 未发布底座开发消费
+
+当前源码声明版本为 1.2.2；开发装配不是新发布的 1.2.2。默认发行依赖和版本保持原声明。新 SPI 需要含 JniCallPlan 的底座 build identity，在正式坐标升级前使用显式开发入口：
+
+```sh
+./gradlew -PdevelopmentBuildIdentity=/absolute/build-identity.json \
+  -ProbolectricRepository=file:///absolute/robolectric-repository \
+  -PapkParserRepository=file:///absolute/apk-parser-repository \
+  developmentInstall
+./gradlew -PdevelopmentBuildIdentity=/absolute/build-identity.json \
+  -ProbolectricRepository=file:///absolute/robolectric-repository \
+  -PapkParserRepository=file:///absolute/apk-parser-repository \
+  developmentJniIntegration
+```
+
+输入必须为 schema 1、kind=build、published=false。开发模式逐文件核对三核心 classes 的 identity，按精确 module 排除旧 unidbg-api / unidbg-android / unidbg-unicorn2 依赖，再接入原 classes 与正式 Maven POM 声明的依赖。producer 附加的 consumer_classpath_file 按原路径和 SHA-256 分离；runtime 由自己的 Gradle 图提供 Jackson、picocli 与 Logback。底座依赖使用 Gradle 正常解析与冲突决议。runtime 保留 net.dongliu:apk-parser:2.6.10 的明确排除，唯一 parser 为自身已声明的 fork 2.6.11；不按文件名猜测坐标。
+
+开发输出位于 `build/development/<identity-sha256前16位>/`。`developmentInstall` 使用原 WorkerMain 与 client 协议；worker JAR 的 Class-Path 保留有序依赖与未经重新编译的核心目录。安装 manifest 记录 development=true、published=false、sourceDeclaredVersion、源码提交与脏状态、源码文件摘要、完整底座 identity、输入摘要、producer consumer 排除、parser 差异、declared/resolved 依赖、安装二进制与有序 classpath。`spiClasspath` 提供消费者所需的新 SPI JAR、三核心目录与 SPI 依赖的已安装路径，逐项记录 kind、文件摘要与核心 component；消费者复用该清单，不再独立解析底座 identity。开发 classpath 不声明与 collector 的完整 classpath 逐项相等。装配验证 parser 类仅有 fork 来源、SLF4J provider 仅为 Logback。开发模式拒绝 publish、releaseLocal 与普通发行安装任务。
+
+`developmentJniIntegration` 仅显式执行现有单项 lifecycle/JNI 集成，不加入默认测试集。它使用真实子进程，覆盖 worker 隔离、持久通道、取消与资源关闭，同时验证 ordinary/A 的 modeled overload、HostJni owner、Host→Host continuation、失败恢复、规范化观察值与无 WorkerSession 的宿主 getter。
 
 ## Profile
 
