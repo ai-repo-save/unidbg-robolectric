@@ -5,7 +5,7 @@ if (coreClasspath.isPresent) {
     fun readClasspath(path: String) = file(path).readText().trim().split(File.pathSeparator).map { file(it) }
     val inputPaths = readClasspath(coreClasspath.get())
     val corePaths = inputPaths.filter { it.isDirectory }
-    val coreNames = corePaths.map { it.name }.toSet()
+    val coreNames = setOf("unidbg-api", "unidbg-android", "unidbg-unicorn2")
     val consumerPaths = providers.gradleProperty("developmentConsumerClasspath").orNull
         ?.let(::readClasspath)?.toSet() ?: emptySet()
 
@@ -45,10 +45,10 @@ if (coreClasspath.isPresent) {
             }
         }
     }
-    val coreJars = corePaths.map { path ->
-        tasks.register<Jar>("developmentJar-${path.name}") {
+    val coreJars = corePaths.mapIndexed { index, path ->
+        tasks.register<Jar>("developmentCoreJar$index") {
             from(path)
-            archiveFileName.set("${path.name}.jar")
+            archiveFileName.set("development-core-$index.jar")
             destinationDirectory.set(layout.buildDirectory.dir("core"))
         }
     }
