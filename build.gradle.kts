@@ -15,8 +15,12 @@ java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
 
 allprojects {
     group = "io.github.ai-repo-save"
-    version = "1.2.1"
+    version = "1.2.2"
+    layout.buildDirectory.set(layout.projectDirectory.dir("build/$version"))
     repositories {
+        providers.gradleProperty("apkParserRepository").orNull?.let { repository ->
+            maven { url = uri(repository); content { includeGroup("io.github.ai-repo-save.apk-parser") } }
+        }
         providers.gradleProperty("unidbgRepository").orNull?.let { repository ->
             maven { url = uri(repository); content { includeGroup("io.github.ai-repo-save.unidbg") } }
         }
@@ -111,7 +115,9 @@ dependencies {
     add(integration.implementationConfigurationName, project(":spi"))
     add(integration.implementationConfigurationName, "io.github.ai-repo-save.robolectric:robolectric:1.2.0")
     add(integration.implementationConfigurationName, "org.robolectric:android-all:11-robolectric-6757853")
-    add(integration.implementationConfigurationName, "io.github.ai-repo-save.unidbg:unidbg-android:0.13.1")
+    add(integration.implementationConfigurationName, "io.github.ai-repo-save.unidbg:unidbg-android:0.13.1") {
+        exclude(group = "net.dongliu", module = "apk-parser")
+    }
     add(integration.implementationConfigurationName, "io.github.ai-repo-save.unidbg:unidbg-unicorn2:0.13.1")
     add(integration.implementationConfigurationName, "org.slf4j:slf4j-api:2.0.20")
     add(integration.runtimeOnlyConfigurationName, "ch.qos.logback:logback-classic:1.5.18")
@@ -155,6 +161,25 @@ tasks.register<Test>("jniIntegration") {
         "--add-opens=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED"
     )
     testLogging { events("passed", "failed", "standardOut", "standardError"); showExceptions = true; showStackTraces = true }
+}
+
+tasks.register<Test>("apkStartupIntegration") {
+    description = "Start one Android worker using an actual APK and record the loaded APK parser."
+    dependsOn(":worker:installDist")
+    testClassesDirs = integration.output.classesDirs
+    classpath = integration.runtimeClasspath
+    useJUnit()
+    filter { includeTestsMatching("org.example.unidbg.ApkStartupIntegrationTest") }
+    outputs.upToDateWhen { false }
+    reports.junitXml.outputLocation = layout.buildDirectory.dir("evidence/$runId/apk-startup/xml")
+    reports.html.outputLocation = layout.buildDirectory.dir("evidence/$runId/apk-startup/html")
+    systemProperty("integration.runtime", project(":worker").layout.buildDirectory.dir("install/unidbg-worker").get().asFile.absolutePath)
+    systemProperty("integration.evidenceDir", layout.buildDirectory.dir("evidence/$runId/apk-startup/artifacts").get().asFile.absolutePath)
+    doFirst {
+        systemProperty("integration.fixtureClasspath", integration.output.classesDirs.asPath)
+        systemProperty("integration.apk", file(providers.gradleProperty("startupApk").get()).absolutePath)
+    }
+    testLogging { events("passed", "failed"); showExceptions = true; showStackTraces = true }
 }
 
 apply(from = "gradle/release.gradle.kts")

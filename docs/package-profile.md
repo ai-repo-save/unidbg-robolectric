@@ -1,6 +1,6 @@
 # 包 Profile
 
-Runtime 1.2.1 的 Android 模式通过 `profile.package` 配置唯一宿主，通过可选的 `profile.packages` 数组配置附加已安装包。每项必须提供非空 `name` 或用于派生包名的 `apk`。附加包名必须唯一，与宿主重名时拒绝启动。
+Runtime 1.2.2 的 Android 模式通过 `profile.package` 配置唯一宿主，通过可选的 `profile.packages` 数组配置附加已安装包。每项必须提供非空 `name` 或用于派生包名的 `apk`。附加包名必须唯一，与宿主重名时拒绝启动。
 
 库在 Android 引导前解析 APK，将结果写入 `effective-request.json`。`RuntimeApplication.onCreate()` 在工作入口启动前投影宿主与附加包。宿主保留框架创建的 `ApplicationInfo`；附加包使用独立的 `PackageInfo` 和 `ApplicationInfo`，统一通过公开的 `ShadowPackageManager.installPackage` 安装。`android` 包也由调用方在清单中显式配置。
 
@@ -25,7 +25,7 @@ Runtime 1.2.1 的 Android 模式通过 `profile.package` 配置唯一宿主，�
 | `requestedPermissions` | string 数组或 null | `PackageInfo.requestedPermissions` |
 | `requestedPermissionsFlags` | 32 位 integer 数组或 null | `PackageInfo.requestedPermissionsFlags` |
 
-提供 `apk` 时，库通过 apk-parser 2.6.10 派生 `name`、`versionName`、`versionCode` 和 APK 声明的 `targetSdk`，通过 apksig 派生 `signatures`。显式提供的同名字段必须与派生结果一致，冲突时拒绝启动。附加包复用相同的解析和冲突检查。
+提供 `apk` 时，库通过 `io.github.ai-repo-save.apk-parser:apk-parser:2.6.11` 派生 `name`、`versionName`、`versionCode` 和 APK 声明的 `targetSdk`，通过 apksig 派生 `signatures`。显式提供的同名字段必须与派生结果一致，冲突时拒绝启动。附加包复用相同的解析和冲突检查。
 
 未提供的字段保留现有框架对象或新对象的初始值。库不按机型或包名补齐包事实。公开的 `installPackage` 会设置 `FLAG_INSTALLED`，并为缺失的包名、进程名和目标 SDK 应用 Robolectric 自身的安装语义。
 

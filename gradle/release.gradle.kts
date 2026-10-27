@@ -7,6 +7,14 @@ val validateRelease = tasks.register("validateRelease") {
         check(status.isBlank()) { "Formal release requires a clean source checkout" }
         check(providers.gradleProperty("unidbgRepository").isPresent) { "Pass -PunidbgRepository=<stable fork Maven repository>" }
         check(providers.gradleProperty("robolectricRepository").isPresent) { "Pass -ProbolectricRepository=<stable core/framework Maven repository>" }
+        check(providers.gradleProperty("apkParserRepository").isPresent) { "Pass -PapkParserRepository=<stable APK parser Maven repository>" }
+        val parserRepository = file(providers.gradleProperty("apkParserRepository").get())
+        check(parserRepository.resolve("release-manifest.json").isFile) { "Stable APK parser release receipt is missing" }
+        for (extension in listOf("pom", "jar")) {
+            check(parserRepository.resolve("io/github/ai-repo-save/apk-parser/apk-parser/2.6.11/apk-parser-2.6.11.$extension").isFile) {
+                "Stable APK parser 2.6.11 repository is incomplete: $extension"
+            }
+        }
         val unidbgRepository = file(providers.gradleProperty("unidbgRepository").get())
         check(unidbgRepository.resolve("release-manifest.json").isFile) { "Stable unidbg 0.13.1 release receipt is missing" }
         for (artifact in listOf("unidbg-api", "unidbg-android", "unidbg-unicorn2")) {
@@ -36,11 +44,19 @@ val stageRobolectric = tasks.register<Copy>("stageRobolectricRelease") {
     from(providers.gradleProperty("robolectricRepository")) { include("io/github/ai-repo-save/robolectric/**") }
     into(layout.buildDirectory.dir("repository"))
 }
+val stageApkParser = tasks.register<Copy>("stageApkParserRelease") {
+    mustRunAfter(validateRelease)
+    from(providers.gradleProperty("apkParserRepository")) { include("io/github/ai-repo-save/apk-parser/**") }
+    from(providers.gradleProperty("apkParserRepository").map { file(it).resolve("release-manifest.json") }) {
+        rename { "apk-parser-release-manifest.json" }
+    }
+    into(layout.buildDirectory.dir("repository"))
+}
 subprojects {
     tasks.withType<org.gradle.api.publish.maven.tasks.PublishToMavenRepository>().configureEach { mustRunAfter(validateRelease) }
 }
 val writeReleaseManifest = tasks.register("writeReleaseManifest") {
-    dependsOn(stageUnidbg, stageRobolectric, ":client:publishAllPublicationsToReleaseRepository",
+    dependsOn(stageUnidbg, stageRobolectric, stageApkParser, ":client:publishAllPublicationsToReleaseRepository",
         ":spi:publishAllPublicationsToReleaseRepository", ":worker:publishAllPublicationsToReleaseRepository")
     doLast {
         val repository = layout.buildDirectory.dir("repository").get().asFile
@@ -51,7 +67,8 @@ val writeReleaseManifest = tasks.register("writeReleaseManifest") {
             "coordinates" to listOf("client", "spi", "worker").map { "io.github.ai-repo-save:unidbg-robolectric-$it:$releaseVersion" },
             "dependencyCoordinates" to listOf("io.github.ai-repo-save.unidbg:*:0.13.1",
                 "io.github.ai-repo-save.robolectric:robolectric:1.2.0",
-                "io.github.ai-repo-save.robolectric:shadows-framework:1.2.0")
+                "io.github.ai-repo-save.robolectric:shadows-framework:1.2.0",
+                "io.github.ai-repo-save.apk-parser:apk-parser:2.6.11")
         ))))
     }
 }

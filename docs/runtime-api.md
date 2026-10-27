@@ -1,6 +1,6 @@
-# Runtime 1.2.1 公共合同
+# Runtime 1.2.2 公共合同
 
-坐标为 `io.github.ai-repo-save:unidbg-robolectric-{client,spi,worker}:1.2.1`，JDK 21。业务实现依赖 SPI；父进程仅依赖 client。worker distribution 提供执行环境与离线 API 30 SDK。底座为 `io.github.ai-repo-save.unidbg:*:0.13.1`；唯一 Robolectric core 为 `io.github.ai-repo-save.robolectric:robolectric:1.2.0`，正式传递依赖完整 `io.github.ai-repo-save.robolectric:shadows-framework:1.2.0`，替代官方同名 framework；其他官方支持模块保持 4.17。
+坐标为 `io.github.ai-repo-save:unidbg-robolectric-{client,spi,worker}:1.2.2`，JDK 21。业务实现依赖 SPI；父进程仅依赖 client。worker distribution 提供执行环境与离线 API 30 SDK。底座为 `io.github.ai-repo-save.unidbg:*:0.13.1`；唯一 Robolectric core 为 `io.github.ai-repo-save.robolectric:robolectric:1.2.0`，正式传递依赖完整 `io.github.ai-repo-save.robolectric:shadows-framework:1.2.0`，替代官方同名 framework；其他官方支持模块保持 4.17。
 
 ## 工作入口
 
@@ -76,7 +76,7 @@ session.configureVm(vm, jni);
 }
 ```
 
-Android 模式提供 `package.name` 或单独提供 `package.apk`。`apk` 是所建宿主 Application 的 APK 身份来源，必须是存在的绝对文件路径；库在同 JVM 引导前通过 apk-parser 读取 name / versionName / versionCode / targetSdk，通过官方 apksig 9.4.1 正式 API 按 API 30 验证 v1/v2/v3 签名并派生 GET_SIGNATURES 身份。验证失败时拒绝启动；存在签名轮换历史时只返回最旧证书，其他情况每个 signer 对应单张证书 DER，不展开证书链。显式提供同字段时必须与 APK 一致，冲突拒绝；派生后的配置保存在 effective-request.json。不执行 DEX。
+Android 模式提供 `package.name` 或单独提供 `package.apk`。`apk` 是所建宿主 Application 的 APK 身份来源，必须是存在的绝对文件路径；库在同 JVM 引导前通过 `io.github.ai-repo-save.apk-parser:apk-parser:2.6.11` 读取 name / versionName / versionCode / targetSdk，通过官方 apksig 9.4.1 正式 API 按 API 30 验证 v1/v2/v3 签名并派生 GET_SIGNATURES 身份。验证失败时拒绝启动；存在签名轮换历史时只返回最旧证书，其他情况每个 signer 对应单张证书 DER，不展开证书链。显式提供同字段时必须与 APK 一致，冲突拒绝；派生后的配置保存在 effective-request.json。不执行 DEX。
 
 `createVm(emulator, moduleApk, jni)` 的模块 APK 独立于此来源。例如 DroidGuard 下载 VM 的 APK 包不是宿主 GMS，不能将它当作 package.apk 来重定义 Application 身份。
 
