@@ -44,7 +44,10 @@ public final class ApkStartupIntegrationTest {
             assertEquals(result.failure().toString(), RunResult.Status.COMPLETED, result.status());
         }
         assertEquals(nonce, Files.readString(evidence.resolve("startup.bin")));
-        JsonNode observed = JSON.readTree(evidence.resolve("startup.json").toFile());
+        verifyParserAssembly(runtime, JSON.readTree(evidence.resolve("startup.json").toFile()));
+    }
+
+    private static void verifyParserAssembly(Path runtime, JsonNode observed) throws Exception {
         String source = "jar:" + runtime.resolve("lib/apk-parser-2.6.11.jar").toUri().toURL()
                 + "!/net/dongliu/apk/parser/ApkFile.class";
         assertEquals(source, observed.required("parser_class_resource").asText());
