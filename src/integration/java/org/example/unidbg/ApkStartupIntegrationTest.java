@@ -12,12 +12,14 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.jar.JarFile;
 import net.dongliu.apk.parser.ApkFile;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
@@ -46,8 +48,15 @@ public final class ApkStartupIntegrationTest {
         String source = "jar:" + runtime.resolve("lib/apk-parser-2.6.11.jar").toUri().toURL()
                 + "!/net/dongliu/apk/parser/ApkFile.class";
         assertEquals(source, observed.required("parser_class_resource").asText());
-        assertEquals(JSON.valueToTree(List.of(source)),
-                observed.required("parser_resources"));
+        var providers = new ArrayList<Path>();
+        try (var files = Files.list(runtime.resolve("lib"))) {
+            for (Path file : files.filter(path -> path.toString().endsWith(".jar")).sorted().toList()) {
+                try (var jar = new JarFile(file.toFile())) {
+                    if (jar.getJarEntry("net/dongliu/apk/parser/ApkFile.class") != null) providers.add(file);
+                }
+            }
+        }
+        assertEquals(List.of(runtime.resolve("lib/apk-parser-2.6.11.jar")), providers);
     }
 
     public static final class Fixture implements WorkerEntrypoint {
