@@ -15,6 +15,19 @@ fun sha256(file: File): String {
     return digest.digest().joinToString("") { "%02x".format(it) }
 }
 
+fun directoryIdentity(directory: File): List<Map<String, Any>> = directory.walkTopDown().filter { it.isFile }
+    .sortedBy { it.relativeTo(directory).invariantSeparatorsPath }.map { file -> mapOf(
+        "path" to file.relativeTo(directory).invariantSeparatorsPath, "sha256" to sha256(file), "bytes" to file.length()
+    ) }.toList()
+
+fun requireDirectoryIdentity(directory: File, expected: List<Map<*, *>>) {
+    check(directory.isDirectory) { "Core directory is missing: $directory" }
+    fun indexed(entries: List<Map<*, *>>) = entries.associate {
+        it["path"] to Pair(it["sha256"], (it["bytes"] as Number).toLong())
+    }
+    check(indexed(directoryIdentity(directory)) == indexed(expected)) { "Core directory identity mismatch: $directory" }
+}
+
 val identityProperty = providers.gradleProperty("developmentBuildIdentity")
 if (identityProperty.isPresent) {
     val identityFile = file(identityProperty.get()).canonicalFile
@@ -84,12 +97,7 @@ if (identityProperty.isPresent) {
             for ((path, expected) in inputPaths.zip(pathIdentities)) {
                 when (expected["kind"]) {
                     "file" -> check(path.isFile && sha256(path) == expected["sha256"]) { "Build dependency identity mismatch: $path" }
-                    "directory" -> {
-                        val files = expected["files"] as List<Map<*, *>>
-                        val actual = path.walkTopDown().filter { it.isFile }.map { it.relativeTo(path).invariantSeparatorsPath }.toSet()
-                        check(actual == files.map { it["path"] }.toSet()) { "Core directory entries mismatch: $path" }
-                        for (entry in files) check(sha256(path.resolve(entry["path"] as String)) == entry["sha256"]) { "Core binary identity mismatch: ${entry["path"]}" }
-                    }
+                    "directory" -> requireDirectoryIdentity(path, expected["files"] as List<Map<*, *>>)
                     else -> error("Unsupported path identity kind: ${expected["kind"]}")
                 }
             }
@@ -169,6 +177,16 @@ if (identityProperty.isPresent) {
                     val id = it.id.componentIdentifier as? ModuleComponentIdentifier
                     id?.let { id -> mapOf("coordinate" to "${id.group}:${id.module}:${id.version}", "source" to it.file.path, "sha256" to sha256(it.file)) }
                 }
+                val selections = selected.map { declared ->
+                    val actual = resolved.filter { (it["coordinate"] as String).substringBeforeLast(':') == declared.coordinate.substringBeforeLast(':') }
+                    check(actual.isNotEmpty()) { "Declared bottom dependency is absent from the runtime: ${declared.coordinate}" }
+                    mapOf(
+                        "declaredCoordinate" to declared.coordinate, "declaredSource" to declared.file.path,
+                        "declaredSha256" to sha256(declared.file), "selected" to actual,
+                        "sameCoordinate" to actual.all { it["coordinate"] == declared.coordinate },
+                        "sameBytes" to actual.all { it["sha256"] == sha256(declared.file) }
+                    )
+                }
                 val jars = runtimeInputs().filter { it.isFile }
                 val slf4jProviders = jars.flatMap { jar -> ZipFile(jar).use { zip ->
                     zip.getEntry("META-INF/services/org.slf4j.spi.SLF4JServiceProvider")?.let { entry ->
@@ -178,11 +196,16 @@ if (identityProperty.isPresent) {
                 check(slf4jProviders == listOf("ch.qos.logback.classic.spi.LogbackServiceProvider")) { "Expected the unique runtime Logback provider: $slf4jProviders" }
                 val parserSources = jars.filter { jar -> ZipFile(jar).use { it.getEntry("net/dongliu/apk/parser/ApkFile.class") != null } }
                 check(parserSources.size == 1 && resolved.any { it["coordinate"] == "io.github.ai-repo-save.apk-parser:apk-parser:2.6.11" && it["source"] == parserSources.single().path }) { "APK parser must have one fork-defined class source" }
-                val binaries = runtimeInputs().zip(paths).map { (source, relative) -> mapOf(
-                    "source" to source.path, "installed" to "lib/$relative", "kind" to if (source.isDirectory) "directory" else "file",
-                    "sha256" to if (source.isFile) sha256(source) else null,
-                    "component" to corePaths.indexOf(source).takeIf { it >= 0 }?.let { components[it]["artifact_id"] }
-                ) }
+                val binaries = runtimeInputs().zip(paths).map { (source, relative) ->
+                    val coreIndex = corePaths.indexOf(source)
+                    val files = if (source.isDirectory) pathIdentities[coreIndex]["files"] as List<Map<*, *>> else null
+                    if (files != null) requireDirectoryIdentity(root.resolve("lib/$relative"), files)
+                    mapOf(
+                        "source" to source.path, "installed" to "lib/$relative", "kind" to if (source.isDirectory) "directory" else "file",
+                        "sha256" to if (source.isFile) sha256(source) else null, "files" to files,
+                        "component" to coreIndex.takeIf { it >= 0 }?.let { components[it]["artifact_id"] }
+                    )
+                }
                 val spiJar = project(":spi").tasks.named<Jar>("jar").get().archiveFile.get().asFile
                 val spiInputs = listOf(spiJar) + corePaths + project(":spi").configurations.getByName("runtimeClasspath").files
                 val spiClasspath = spiInputs.distinct().map { source ->
@@ -196,7 +219,8 @@ if (identityProperty.isPresent) {
                     "producerConsumerExclusions" to producerConsumer.map { it.path },
                     "dependencyExclusions" to excluded.map { mapOf("coordinate" to it.coordinate, "source" to it.file.path, "reason" to "Runtime SPI declares fork apk-parser 2.6.11") },
                     "declaredBottomDependencies" to selected.map { mapOf("coordinate" to it.coordinate, "source" to it.file.path, "pom" to it.pom.path, "sha256" to sha256(it.file)) },
-                    "resolvedDependencies" to resolved, "binaries" to binaries, "spiClasspath" to spiClasspath,
+                    "resolvedDependencies" to resolved, "bottomDependencySelections" to selections,
+                    "binaries" to binaries, "spiClasspath" to spiClasspath,
                     "orderedClasspath" to paths.map { "lib/$it" },
                     "jvmClasspath" to listOf("lib/${workerJar.get().archiveFile.get().asFile.name}"), "slf4jProviders" to slf4jProviders,
                     "apkParserClassSource" to "lib/${paths[runtimeInputs().indexOf(parserSources.single())]}",
