@@ -103,7 +103,16 @@ public final class RuntimeIntegrationTest {
             profile.put("processName", "org.example." + operation + ":worker");
             profile.putObject("settings").putObject("global").put("library_seed", "seed-" + operation);
             profile.putObject("preferences").putObject("seeded").put("initial", "seeded-" + operation);
-            profile.putObject("build").put("MODEL", "JNI-model-" + operation);
+            var build = profile.putObject("build").put("MODEL", "JNI-model-" + operation)
+                    .put("ID", "ZP11.260821.010").put("DISPLAY", "ONEPLUS A6010_41_210928")
+                    .put("TAGS", "release-keys").put("TYPE", "user")
+                    .put("FINGERPRINT", "google/tokay_beta/tokay:CANARY/ZP11.260821.010/16290768:user/release-keys");
+            build.putObject("VERSION").put("RELEASE", "CANARY").put("INCREMENTAL", "16290768")
+                    .put("SECURITY_PATCH", "2026-09-05");
+            profile.putObject("nativeProperties").put("ro.product.model", "ONEPLUS A6010")
+                    .put("ro.build.fingerprint", "OnePlus/OnePlus6T/OnePlus6T:11/RKQ1.201217.002/2109280555:user/release-keys")
+                    .put("ro.build.id", "RKQ1.201217.002").put("ro.build.version.release", "11")
+                    .put("ro.build.version.incremental", "2109280555").put("ro.build.version.security_patch", "2021-09-01");
             profile.putObject("filesystem").put("guestDataDirectory", "/data/user/0/org.example." + operation);
         }
         return new RunRequest(installation, RuntimeFixture.class.getName(),

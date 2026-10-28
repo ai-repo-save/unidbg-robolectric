@@ -17,9 +17,16 @@ final class NativeFilesProbe {
         var memory = emulator.getMemory().malloc(65536, true);
         try {
             var pointer = memory.getPointer();
-            assertEquals(model.getBytes(StandardCharsets.UTF_8).length,
-                    libc.findSymbolByName("__system_property_get").call(emulator, "ro.product.model", pointer).intValue());
-            assertEquals(model, pointer.getString(0));
+            var properties = session.profile().required("nativeProperties").fields();
+            while (properties.hasNext()) {
+                var property = properties.next();
+                String value = property.getValue().textValue();
+                assertEquals(value.getBytes(StandardCharsets.UTF_8).length,
+                        libc.findSymbolByName("__system_property_get").call(emulator, property.getKey(), pointer).intValue());
+                assertEquals(value, pointer.getString(0));
+            }
+            assertEquals(2, libc.findSymbolByName("__system_property_get").call(emulator, "ro.build.version.sdk", pointer).intValue());
+            assertEquals("30", pointer.getString(0));
             String guest = session.profile().path("filesystem").required("guestDataDirectory").asText();
             Path data = application.getDataDir().toPath();
             try (var entries = Files.walk(data)) {

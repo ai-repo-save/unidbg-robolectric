@@ -7,7 +7,6 @@ import android.provider.Settings;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import org.robolectric.shadows.ShadowBuild;
 import org.robolectric.shadows.ShadowSystemProperties;
 
 final class ProfileProjection {
@@ -18,22 +17,10 @@ final class ProfileProjection {
         }
         Map<String, String> properties = new LinkedHashMap<>();
         profile.path("nativeProperties").fields().forEachRemaining(entry -> properties.put(entry.getKey(), ProfileValues.text(entry.getValue(), entry.getKey())));
-        if (android) same(properties, "ro.build.version.sdk", "30");
-        profile.path("build").fields().forEachRemaining(entry -> {
-            String property = switch (entry.getKey()) {
-                case "MODEL" -> "ro.product.model";
-                case "MANUFACTURER" -> "ro.product.manufacturer";
-                case "BRAND" -> "ro.product.brand";
-                case "DEVICE" -> "ro.product.device";
-                case "PRODUCT" -> "ro.product.name";
-                case "BOARD" -> "ro.product.board";
-                case "HARDWARE" -> "ro.hardware";
-                case "FINGERPRINT" -> "ro.build.fingerprint";
-                case "SERIAL" -> "ro.serialno";
-                default -> throw new IllegalArgumentException("Unsupported Build profile field: " + entry.getKey());
-            };
-            same(properties, property, ProfileValues.text(entry.getValue(), entry.getKey()));
-        });
+        if (android) properties.putIfAbsent("ro.build.version.sdk", "30");
+        if (profile.path("build").has("SERIAL")) {
+            same(properties, "ro.serialno", ProfileValues.text(profile.path("build").get("SERIAL"), "build.SERIAL"));
+        }
         return java.util.Collections.unmodifiableMap(properties);
     }
 
@@ -43,21 +30,7 @@ final class ProfileProjection {
     }
 
     static void apply(Application application, JsonNode profile, Map<String, String> properties) {
-        profile.path("build").fields().forEachRemaining(entry -> {
-            String value = ProfileValues.text(entry.getValue(), entry.getKey());
-            switch (entry.getKey()) {
-                case "MODEL" -> ShadowBuild.setModel(value);
-                case "MANUFACTURER" -> ShadowBuild.setManufacturer(value);
-                case "BRAND" -> ShadowBuild.setBrand(value);
-                case "DEVICE" -> ShadowBuild.setDevice(value);
-                case "PRODUCT" -> ShadowBuild.setProduct(value);
-                case "BOARD" -> ShadowBuild.setBoard(value);
-                case "HARDWARE" -> ShadowBuild.setHardware(value);
-                case "FINGERPRINT" -> ShadowBuild.setFingerprint(value);
-                case "SERIAL" -> ShadowBuild.setSerial(value);
-                default -> throw new IllegalArgumentException("Unsupported Build profile field: " + entry.getKey());
-            }
-        });
+        BuildProjection.apply(profile.path("build"));
         properties.forEach(ShadowSystemProperties::override);
         profile.path("settings").fields().forEachRemaining(namespace -> {
             if (!namespace.getValue().isObject()) throw new IllegalArgumentException("Settings namespace must be a JSON object: " + namespace.getKey());

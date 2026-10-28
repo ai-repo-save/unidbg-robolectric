@@ -209,6 +209,24 @@ public final class RuntimeFixture implements WorkerEntrypoint {
             assertEquals(secure, Settings.Secure.getString(application.getContentResolver(), KEY));
             String model = session.profile().required("build").required("MODEL").asText();
             assertEquals(model, jni.staticObjectField("android/os/Build", "MODEL", "Ljava/lang/String;"));
+            assertEquals("ZP11.260821.010", jni.staticObjectField("android/os/Build", "ID", "Ljava/lang/String;"));
+            assertEquals("ONEPLUS A6010_41_210928", jni.staticObjectField("android/os/Build", "DISPLAY", "Ljava/lang/String;"));
+            assertEquals("release-keys", jni.staticObjectField("android/os/Build", "TAGS", "Ljava/lang/String;"));
+            assertEquals("user", jni.staticObjectField("android/os/Build", "TYPE", "Ljava/lang/String;"));
+            assertEquals("google/tokay_beta/tokay:CANARY/ZP11.260821.010/16290768:user/release-keys",
+                    jni.staticObjectField("android/os/Build", "FINGERPRINT", "Ljava/lang/String;"));
+            assertEquals("CANARY", jni.staticObjectField("android/os/Build$VERSION", "RELEASE", "Ljava/lang/String;"));
+            assertEquals("16290768", jni.staticObjectField("android/os/Build$VERSION", "INCREMENTAL", "Ljava/lang/String;"));
+            assertEquals("2026-09-05", jni.staticObjectField("android/os/Build$VERSION", "SECURITY_PATCH", "Ljava/lang/String;"));
+            assertEquals(30, android.os.Build.VERSION.SDK_INT);
+            var properties = session.profile().required("nativeProperties").fields();
+            while (properties.hasNext()) {
+                var property = properties.next();
+                assertEquals(property.getValue().textValue(), jni.value(jni.staticObjectCall("android/os/SystemProperties", "get",
+                        "(Ljava/lang/String;)Ljava/lang/String;", jni.wrap(property.getKey()))));
+            }
+            assertEquals("30", jni.value(jni.staticObjectCall("android/os/SystemProperties", "get",
+                    "(Ljava/lang/String;)Ljava/lang/String;", jni.wrap("ro.build.version.sdk"))));
             PackageInfo installed = new PackageInfo();
             installed.packageName = "org.example.installed";
             installed.versionName = "release-" + label;

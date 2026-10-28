@@ -110,7 +110,31 @@ Android 模式提供 `package.name` 或单独提供 `package.apk`。`apk` 是所
 
 可选 package 字段还有 `signatures`（Base64 证书 DER 数组）、`installer`、`flags`、`nativeLibraryDir`、`guestSourceDir` 和成对采集的 `requestedPermissions` / `requestedPermissionsFlags`。权限两数组按索引平行，必须等长或同时为 null；库保留采集的 flags，不从 APK 声明推导授权状态。`packages` 数组提供附加已安装包，复用相同元数据投影，不改变宿主身份；重复包名或与宿主重名时拒绝启动。完整字段语义见 `docs/package-profile.md`。物理 `apk` 用于宿主资源/元数据，`guestSourceDir` 是 native IO 的显式文件挂载别名。包身份和 APK 路径由 core 的公开 applicationPackageName/applicationProcessName/applicationSourceDir 配置在 Package、ApplicationInfo、BoundApplication 和 LoadedApk 初始化处建立。可选 package.uid 由官方 TestEnvironmentLifecyclePlugin.onSetupApplicationState 在绑定前调用 ShadowProcess.setUid；未提供时保持 Process.myUid 原默认。Application 使用官方 base；其他包元数据在 onCreate 中通过公开字段和 PM shadow 配置。
 
-Build 支持 MODEL / MANUFACTURER / BRAND / DEVICE / PRODUCT / BOARD / HARDWARE / FINGERPRINT / SERIAL。SERIAL 通过公开 ShadowBuild.setSerial 配置 Build.getSerial()，同时派生 ro.serialno；API 30 的弃用静态字段 Build.SERIAL 按 Android 合同保持 Build.UNKNOWN，不作为真实序列号的读取入口。共同的 native 属性由相同输入派生，冲突输入拒绝。Settings 支持 global / secure / system，值是字符串或 null。偏好支持字符串、boolean、int、long。
+`build` 配置进程可见的 Android Build 字段。以下可选字段均为 JSON string，拒绝 null 和未知字段：
+
+| 字段 | 公开投影 API |
+| --- | --- |
+| `MODEL` | `ShadowBuild.setModel` |
+| `MANUFACTURER` | `ShadowBuild.setManufacturer` |
+| `BRAND` | `ShadowBuild.setBrand` |
+| `DEVICE` | `ShadowBuild.setDevice` |
+| `PRODUCT` | `ShadowBuild.setProduct` |
+| `BOARD` | `ShadowBuild.setBoard` |
+| `HARDWARE` | `ShadowBuild.setHardware` |
+| `FINGERPRINT` | `ShadowBuild.setFingerprint` |
+| `ID` | `ShadowBuild.setId` |
+| `DISPLAY` | `ShadowBuild.setDisplay`，由 fork 源提交 `11038b7cd4addf3c9463a63f16def30ec5df2134` 提供 |
+| `TAGS` | `ShadowBuild.setTags` |
+| `TYPE` | `ShadowBuild.setType` |
+| `SERIAL` | `ShadowBuild.setSerial` |
+
+可选 `build.VERSION` 是 JSON 对象，支持字符串字段 `RELEASE`、`INCREMENTAL`、`SECURITY_PATCH`，分别调用 `ShadowBuild.setVersionRelease`、`setVersionIncremental`、`setVersionSecurityPatch`。这些字段不改变实际 Android SDK：`Build.VERSION.SDK_INT` 仍为 30。
+
+`nativeProperties` 是属性名称到字符串值的独立映射，同一输入通过 `ShadowSystemProperties.override` 提供给 Android `SystemProperties.get`，通过现有 native 属性 provider 提供给 libc 查询。Build 静态字段可与这两个属性查询通道的值不同。库不从一般 Build 字段派生属性，也不以两者不同为由拒绝输入。Android 模式仅在属性未配置时补入 `ro.build.version.sdk="30"`；显式属性值不改变实际运行 SDK。
+
+SERIAL 保留既有合同：`build.SERIAL` 配置 `Build.getSerial()` 并派生 `ro.serialno`，显式 `nativeProperties.ro.serialno` 与其不同时拒绝启动。API 30 的弃用静态字段 `Build.SERIAL` 按 Android 合同保持 `Build.UNKNOWN`，不作为真实序列号的读取入口。
+
+Settings 支持 global / secure / system，值是字符串或 null。偏好支持字符串、boolean、int、long。
 
 可选 `services` 对象通过 `systemFeatures`、`systemAvailableFeatures`、`systemSharedLibraryNames`、`display`、`sensors`、`memory` 配置功能支持、功能列表、共享库名称列表、默认显示、默认传感器集合和内存。显示、传感器和内存的字段语义见 `docs/device-services-profile.md`。其他服务由入口通过公开 shadows 配置。
 
