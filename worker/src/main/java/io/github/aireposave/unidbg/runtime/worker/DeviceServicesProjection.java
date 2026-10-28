@@ -3,6 +3,7 @@ package io.github.aireposave.unidbg.runtime.worker;
 import android.app.ActivityManager;
 import android.app.Application;
 import android.content.Context;
+import android.content.pm.FeatureInfo;
 import android.hardware.Sensor;
 import android.hardware.SensorManager;
 import android.hardware.display.DisplayManager;
@@ -28,8 +29,11 @@ final class DeviceServicesProjection {
     static void apply(Application application, JsonNode profile) {
         if (!profile.has("services")) return;
         JsonNode services = profile.get("services");
-        object(services, "services", Set.of("systemFeatures", "display", "sensors", "memory"));
+        object(services, "services", Set.of("systemFeatures", "systemAvailableFeatures", "systemSharedLibraryNames",
+                "display", "sensors", "memory"));
         if (services.has("systemFeatures")) systemFeatures(application, services.get("systemFeatures"));
+        if (services.has("systemAvailableFeatures")) systemAvailableFeatures(application, services.get("systemAvailableFeatures"));
+        if (services.has("systemSharedLibraryNames")) systemSharedLibraryNames(application, services.get("systemSharedLibraryNames"));
         if (services.has("display")) display(application, services.get("display"));
         if (services.has("sensors")) sensors(application, services.get("sensors"));
         if (services.has("memory")) memory(application, services.get("memory"));
@@ -41,6 +45,41 @@ final class DeviceServicesProjection {
         features.fields().forEachRemaining(entry -> packages.setSystemFeature(entry.getKey(),
                 bool(entry.getValue(), "services.systemFeatures." + entry.getKey())));
         LOG.info("event=system_features_projected count={}", features.size());
+    }
+
+    private static void systemAvailableFeatures(Application application, JsonNode configurations) {
+        if (!configurations.isArray()) throw new IllegalArgumentException("services.systemAvailableFeatures must be a JSON array");
+        List<FeatureInfo> features = new ArrayList<>();
+        for (int index = 0; index < configurations.size(); index++) {
+            JsonNode configuration = configurations.get(index);
+            String path = "services.systemAvailableFeatures[" + index + "]";
+            object(configuration, path, Set.of("name", "version", "reqGlEsVersion"));
+            FeatureInfo feature = new FeatureInfo();
+            JsonNode name = configuration.required("name");
+            feature.name = name.isNull() ? null : ProfileValues.text(name, path + ".name");
+            if (configuration.has("version")) feature.version = integer(configuration.get("version"), path + ".version");
+            if (configuration.has("reqGlEsVersion")) feature.reqGlEsVersion = integer(configuration.get("reqGlEsVersion"), path + ".reqGlEsVersion");
+            features.add(feature);
+        }
+        ShadowPackageManager packages = Shadow.extract(application.getPackageManager());
+        packages.clearSystemAvailableFeatures();
+        for (FeatureInfo feature : features) {
+            packages.addSystemAvailableFeature(feature);
+            if (feature.name != null) packages.setSystemFeature(feature.name, true);
+        }
+        LOG.info("event=system_available_features_projected count={}", features.size());
+    }
+
+    private static void systemSharedLibraryNames(Application application, JsonNode configuration) {
+        if (!configuration.isArray()) throw new IllegalArgumentException("services.systemSharedLibraryNames must be a JSON array");
+        List<String> names = new ArrayList<>();
+        for (int index = 0; index < configuration.size(); index++) {
+            names.add(ProfileValues.text(configuration.get(index), "services.systemSharedLibraryNames[" + index + "]"));
+        }
+        ShadowPackageManager packages = Shadow.extract(application.getPackageManager());
+        packages.clearSystemSharedLibraryNames();
+        names.forEach(packages::addSystemSharedLibraryName);
+        LOG.info("event=system_shared_library_names_projected count={}", names.size());
     }
 
     private static void memory(Application application, JsonNode configuration) {

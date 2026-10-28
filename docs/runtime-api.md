@@ -110,7 +110,25 @@ Android 模式提供 `package.name` 或单独提供 `package.apk`。`apk` 是所
 
 可选 package 字段还有 `signatures`（Base64 证书 DER 数组）、`installer`、`flags`、`nativeLibraryDir`、`guestSourceDir` 和成对采集的 `requestedPermissions` / `requestedPermissionsFlags`。权限两数组按索引平行，必须等长或同时为 null；库保留采集的 flags，不从 APK 声明推导授权状态。`packages` 数组提供附加已安装包，复用相同元数据投影，不改变宿主身份；重复包名或与宿主重名时拒绝启动。完整字段语义见 `docs/package-profile.md`。物理 `apk` 用于宿主资源/元数据，`guestSourceDir` 是 native IO 的显式文件挂载别名。包身份和 APK 路径由 core 的公开 applicationPackageName/applicationProcessName/applicationSourceDir 配置在 Package、ApplicationInfo、BoundApplication 和 LoadedApk 初始化处建立。可选 package.uid 由官方 TestEnvironmentLifecyclePlugin.onSetupApplicationState 在绑定前调用 ShadowProcess.setUid；未提供时保持 Process.myUid 原默认。Application 使用官方 base；其他包元数据在 onCreate 中通过公开字段和 PM shadow 配置。
 
-Build 支持 MODEL / MANUFACTURER / BRAND / DEVICE / PRODUCT / BOARD / HARDWARE / FINGERPRINT / SERIAL。SERIAL 通过公开 ShadowBuild.setSerial 配置 Build.getSerial()，同时派生 ro.serialno；API 30 的弃用静态字段 Build.SERIAL 按 Android 合同保持 Build.UNKNOWN，不作为真实序列号的读取入口。共同的 native 属性由相同输入派生，冲突输入拒绝。Settings 支持 global / secure / system，值是字符串或 null。偏好支持字符串、boolean、int、long。可选 `services` 对象通过 `systemFeatures`、`display`、`sensors` 配置功能支持、默认显示和默认传感器集合，字段语义见 `docs/device-services-profile.md`。其他服务由入口通过公开 shadows 配置。
+Build 支持 MODEL / MANUFACTURER / BRAND / DEVICE / PRODUCT / BOARD / HARDWARE / FINGERPRINT / SERIAL。SERIAL 通过公开 ShadowBuild.setSerial 配置 Build.getSerial()，同时派生 ro.serialno；API 30 的弃用静态字段 Build.SERIAL 按 Android 合同保持 Build.UNKNOWN，不作为真实序列号的读取入口。共同的 native 属性由相同输入派生，冲突输入拒绝。Settings 支持 global / secure / system，值是字符串或 null。偏好支持字符串、boolean、int、long。
+
+可选 `services` 对象通过 `systemFeatures`、`systemAvailableFeatures`、`systemSharedLibraryNames`、`display`、`sensors`、`memory` 配置功能支持、功能列表、共享库名称列表、默认显示、默认传感器集合和内存。显示、传感器和内存的字段语义见 `docs/device-services-profile.md`。其他服务由入口通过公开 shadows 配置。
+
+`services.systemFeatures` 保留功能名称到 boolean 的映射，通过 `ShadowPackageManager.setSystemFeature` 配置 `PackageManager.hasSystemFeature(String)`。
+
+`services.systemAvailableFeatures` 是 `FeatureInfo` 配置对象数组。提供数组时，库先调用公开 `ShadowPackageManager.clearSystemAvailableFeatures`，再按输入顺序调用 `addSystemAvailableFeature`。每项支持以下字段：
+
+| 字段 | JSON 类型 | 含义 |
+| --- | --- | --- |
+| `name` | string 或 null，必填 | `FeatureInfo.name`；null 表示 OpenGL ES 版本条目 |
+| `version` | 32 位 integer，可选 | `FeatureInfo.version` |
+| `reqGlEsVersion` | 32 位 integer，可选 | `FeatureInfo.reqGlEsVersion`，OpenGL ES 编码整数 |
+
+省略整数时保留 `FeatureInfo` 初始值 0。库先应用 `systemFeatures`，再将列表中每个非 null 的 `name` 通过同一公开 shadow 设置为支持，使 `getSystemAvailableFeatures()` 与 `hasSystemFeature(String)` 共享已采集名称。库保留未在列表中出现的功能支持配置。空列表沿用 Robolectric 的 getter 语义，`getSystemAvailableFeatures()` 返回 null。当前 fork 的 `hasSystemFeature(String,int)` 恒返回 false，本投影只同步单参数查询。
+
+采集 App 的 `feature:名称[=版本]` 转为 `name` 和可选 `version`；`feature:reqGlEsVersion=0xHEX` 转为 `name:null` 和十六进制数对应的整数 `reqGlEsVersion`。`FeatureInfo.flags` 未由该采集格式提供，schema 不设置该字段。
+
+`services.systemSharedLibraryNames` 是 string 数组，通过公开 `ShadowPackageManager.clearSystemSharedLibraryNames` 和 `addSystemSharedLibraryName` 替换 `PackageManager.getSystemSharedLibraryNames()` 的结果，保留输入顺序，空数组返回空数组。采集 App 的 `library:名称` 去掉前缀后作为一个数组元素。省略任一列表字段时保留对应框架初始状态。
 
 库挂载 guestDataDirectory 到公开 Application.getDataDir()，供 native IO 与宿主 Android API 共享真实文件；同时保留宿主 API 返回的实际数据路径别名，逐条记录 guest、host 和来源。File.getPath 不被改写，不按 JNI 签名伪造 File。native resolver API、rootfs、自定义 syscall 和 ELF 策略仍由 worker-local consumer factory 决定，不由 androidSdk 推导。
 

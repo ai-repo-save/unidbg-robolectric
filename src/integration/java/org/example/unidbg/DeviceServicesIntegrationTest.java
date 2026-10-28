@@ -1,6 +1,7 @@
 package org.example.unidbg;
 
 import android.content.Context;
+import android.content.pm.FeatureInfo;
 import android.hardware.Sensor;
 import android.hardware.SensorManager;
 import android.hardware.display.DisplayManager;
@@ -14,6 +15,7 @@ import io.github.aireposave.unidbg.runtime.spi.WorkerSession;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import org.junit.Test;
@@ -42,7 +44,14 @@ public final class DeviceServicesIntegrationTest {
                 {
                   "package": {"name": "org.example.services", "targetSdk": 30},
                   "services": {
-                    "systemFeatures": {"org.example.feature.present": true, "org.example.feature.absent": false},
+                    "systemFeatures": {"org.example.feature.present": true, "org.example.feature.absent": false,
+                                       "android.hardware.vulkan.level": false},
+                    "systemAvailableFeatures": [
+                      {"name": "android.hardware.audio.output"},
+                      {"name": "android.hardware.vulkan.level", "version": 1},
+                      {"name": null, "reqGlEsVersion": 196610}
+                    ],
+                    "systemSharedLibraryNames": ["android.test.base", "org.apache.http.legacy"],
                     "display": {
                       "name": "Configured display", "flags": 3, "type": 1, "state": 3,
                       "width": 700, "height": 900, "realWidth": 720, "realHeight": 960,
@@ -90,6 +99,15 @@ public final class DeviceServicesIntegrationTest {
             var application = session.application();
             assertEquals(true, application.getPackageManager().hasSystemFeature("org.example.feature.present"));
             assertEquals(false, application.getPackageManager().hasSystemFeature("org.example.feature.absent"));
+            FeatureInfo[] features = application.getPackageManager().getSystemAvailableFeatures();
+            assertArrayEquals(new String[] {"android.hardware.audio.output", "android.hardware.vulkan.level", null},
+                    Arrays.stream(features).map(feature -> feature.name).toArray(String[]::new));
+            assertArrayEquals(new int[] {0, 1, 0}, Arrays.stream(features).mapToInt(feature -> feature.version).toArray());
+            assertArrayEquals(new int[] {0, 0, 196610}, Arrays.stream(features).mapToInt(feature -> feature.reqGlEsVersion).toArray());
+            assertEquals(true, application.getPackageManager().hasSystemFeature("android.hardware.audio.output"));
+            assertEquals(true, application.getPackageManager().hasSystemFeature("android.hardware.vulkan.level"));
+            assertArrayEquals(new String[] {"android.test.base", "org.apache.http.legacy"},
+                    application.getPackageManager().getSystemSharedLibraryNames());
 
             DisplayManager displays = (DisplayManager) application.getSystemService(Context.DISPLAY_SERVICE);
             Display display = java.util.Arrays.stream(displays.getDisplays())
