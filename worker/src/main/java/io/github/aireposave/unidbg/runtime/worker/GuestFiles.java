@@ -51,10 +51,32 @@ final class GuestFiles implements IOResolver<AndroidFileIO> {
     void install(AndroidEmulator emulator) {
         mounts.forEach((guest, host) -> {
             if (!guest.startsWith("/") || !host.isAbsolute()) throw new IllegalArgumentException("Data mounts require absolute guest and host paths");
+            installAncestors(emulator, guest);
             LoggerFactory.getLogger(GuestFiles.class).info("event=file_mount_configured guest={} host={} source={}",
                     guest, host, host.equals(data) ? "Application.getDataDir" : "profile.package.apk");
         });
         emulator.getSyscallHandler().addIOResolver(this);
+    }
+
+    private static void installAncestors(AndroidEmulator emulator, String guest) {
+        var filesystem = emulator.getFileSystem();
+        Path path = Path.of(guest);
+        for (int count = 1; count < path.getNameCount(); count++) {
+            String ancestor = "/" + path.subpath(0, count);
+            var existing = filesystem.queryMetadata(ancestor, false);
+            if (existing.status() == FileQueryResult.Status.ERROR && existing.errno == UnixEmulator.ENOENT) {
+                // BaseFileSystem.mkdir uses host defaults and ignores its mode argument.
+                if (!filesystem.mkdir(ancestor, 0)) throw new IllegalStateException("Creating mount ancestor failed: " + ancestor);
+                FileMetadata facts = filesystem.queryMetadata(ancestor, false).value;
+                LoggerFactory.getLogger(GuestFiles.class).info(
+                        "event=file_mount_ancestor_created guest={} rootfs={} source=runtime_mount_namespace mode={} uid={} gid={}",
+                        ancestor, filesystem.getRootDir(), facts.mode, facts.uid, facts.gid);
+            } else {
+                LoggerFactory.getLogger(GuestFiles.class).debug(
+                        "event=file_mount_ancestor_retained guest={} rootfs={} status={} errno={}",
+                        ancestor, filesystem.getRootDir(), existing.status(), existing.errno);
+            }
+        }
     }
 
     @Override public FileResult<AndroidFileIO> resolve(Emulator<AndroidFileIO> emulator, String pathname, int flags) {

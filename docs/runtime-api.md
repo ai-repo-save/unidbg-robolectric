@@ -157,7 +157,7 @@ Settings 支持 global / secure / system，值是字符串或 null。偏好支�
 
 `services.systemSharedLibraryNames` 是 string 数组，通过公开 `ShadowPackageManager.clearSystemSharedLibraryNames` 和 `addSystemSharedLibraryName` 替换 `PackageManager.getSystemSharedLibraryNames()` 的结果，保留输入顺序，空数组返回空数组。采集 App 的 `library:名称` 去掉前缀后作为一个数组元素。省略任一列表字段时保留对应框架初始状态。
 
-库挂载 guestDataDirectory 到公开 Application.getDataDir()，供 native IO 与宿主 Android API 共享真实文件；同时保留宿主 API 返回的实际数据路径别名，逐条记录 guest、host 和来源。该 provider 在原 resolver 注册链上通过底座 `HostFileFacts` 提供 metadata 与完整目录事实。查询不调用 resolve、open、fstat 或 getdents，不消耗原始操作响应。
+库挂载 guestDataDirectory 到公开 Application.getDataDir()，供 native IO 与宿主 Android API 共享真实文件；同时保留宿主 API 返回的实际数据路径别名，逐条记录 guest、host 和来源。安装挂载时，库通过 emulator rootfs 的 `FileSystem.mkdir` 建立缺失的挂载祖先，保留已有节点及属性。新增祖先属于显式挂载声明构建的虚拟命名空间，日志来源为 `runtime_mount_namespace`；其属性由 rootfs backing 的 `HostFileFacts` 提供，不代表设备目录事实。祖先与挂载 backing 的权限检查继续由底座执行，库不修改权限或推导所有权。挂载根及后代继续使用原宿主 backing。该 provider 在原 resolver 注册链上通过底座 `HostFileFacts` 提供 metadata 与完整目录事实。查询不调用 resolve、open、fstat 或 getdents，不消耗原始操作响应。
 
 `configureVm` 通过现有精确 JNI handler 接入 `java.io.File` 的无参 `exists`、`isFile`、`isDirectory`、`canRead`、`canWrite`、`canExecute`、`length`、`lastModified`、`list` 和 `listFiles`。查询使用该 VM 的 `AndroidSyscallHandler.queryMetadataAt/checkAccessAt/listDirectoryAt`，路径解析、权限判断和供给选择均由底座负责。JNI `File.getPath()` 将已声明的 Application 数据路径投影为 guestDataDirectory；`listFiles()` 返回同一 guest 目录下的 File。构造器和其他 JNI 成员继续默认 Proxy 行为。
 

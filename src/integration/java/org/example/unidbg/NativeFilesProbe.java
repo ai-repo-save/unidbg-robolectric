@@ -157,6 +157,9 @@ final class NativeFilesProbe {
     private static void verifyUnknown(AndroidEmulator emulator, WorkerSession session, Arm64Jni jni,
                                       Module libc, Pointer buffer) throws Exception {
         String path = "/runtime-query/unknown";
+        if (!emulator.getFileSystem().mkdir(new File(path).getParent(), 0)) {
+            throw new IllegalStateException("Creating controlled query ancestor failed: " + path);
+        }
         emulator.getSyscallHandler().addIOResolver(new IOResolver<AndroidFileIO>() {
             private int open;
             @Override public FileResult<AndroidFileIO> resolve(Emulator<AndroidFileIO> target, String pathname, int flags) {
