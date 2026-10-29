@@ -52,7 +52,9 @@ session.configureVm(vm, jni);
 
 路由顺序为精确描述符 handler、已注册 owner delegate、默认 Proxy。owner 使用 JNI internal name。
 
-`Handler.invoke(JniCall)` 同步返回 JNI 值：对象为 `DvmObject`，基本类型为对应包装类型，void 为 null。handler 按条件以 `return call.proceed()` 尾委派默认 Proxy，或以 `return call.invoke(provider)` 尾委派指定 provider。`method()` 保留原 `Jni.class` Method 与重载，`signature()` 和 `arguments()` 保留本次成员与解码参数。ordinary 调用使用普通 modeled callback，V/A 使用 `*V`。
+`Handler.invoke(JniCall)` 同步返回 JNI 值：对象为 `DvmObject`，基本类型为对应包装类型，void 为 null。handler 按条件以 `return call.proceed()` 尾委派默认 Proxy，或以 `return call.invoke(provider)` 尾委派指定 provider。普通成员与字段操作的 `method()` 保留原 `Jni.class` Method 与重载，`signature()` 和 `arguments()` 保留本次成员与解码参数。ordinary 调用使用普通 modeled callback，V/A 使用 `*V`。
+
+Nonvirtual 的 `method()` 为 `HostJni.invokeNonvirtual`。`arguments()` 按该方法顺序保留 dispatch class、原 receiver、`DvmMethod`、解码参数、modeled backend 和 completion。尾委派保留显式 dispatch class，通过标准 JNI 非虚桥执行；原目标 Throwable 仍由 completion 交回 backend。AllocObject 不执行构造方法。既有 receiver 的普通及非虚构造保留同一宿主对象、引用别名和 monitor 身份。
 
 modeled `Jni` 在 backend 执行。`HostJni` 在 backend 解析成员并提取宿主参数，通过既有 `GuestJavaRuntime.submit` 和单次 `GuestJavaWaiter.suspend` 执行宿主操作。completion 回到 backend 后转换宿主结果并写入 JNI 返回值。对象转换保留宿主对象身份。宿主 getter 使用 backend 初始化时捕获的 profile、路径和 classloader；宿主线程不绑定 `WorkerSession`。
 

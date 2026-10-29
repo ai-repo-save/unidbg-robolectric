@@ -88,6 +88,15 @@ final class JniComposition {
                 call = call(delegate, operation, member.getSignature(), new Object[] {type.vm, stat ? type : receiver, member, values},
                         (provider, completed) -> provider.invokeMethod(type, receiver, member, values, stat, backend, completed), backend, observed);
             }
+            case "invokeNonvirtual" -> {
+                DvmObject<?> receiver = (DvmObject<?>) args[1];
+                DvmMethod member = (DvmMethod) args[2];
+                VarArg values = (VarArg) args[3];
+                Method operation = HostJni.class.getMethod("invokeNonvirtual", DvmClass.class, DvmObject.class,
+                        DvmMethod.class, VarArg.class, Function.class, HostJni.Completion.class);
+                call = call(delegate, operation, member.getSignature(), args.clone(),
+                        (provider, completed) -> provider.invokeNonvirtual(type, receiver, member, values, backend, completed), backend, observed);
+            }
             case "invokeConstructor" -> {
                 DvmMethod member = (DvmMethod) args[1];
                 VarArg values = (VarArg) args[2];
