@@ -109,7 +109,8 @@ public final class RuntimeIntegrationTest {
         var profile = JSON.createObjectNode();
         if (mode == RunRequest.Mode.ANDROID) {
             profile.putObject("package").put("name", "org.example." + operation).put("versionName", "1.0").put("versionCode", 1).put("targetSdk", 30)
-                    .put("uid", operation.equals("first") ? 10001 : 10002);
+                    .put("uid", operation.equals("first") ? 10001 : 10002).put("installer", "org.example.installer");
+            profile.putArray("packages").addObject().put("name", "org.example.sideloaded").putNull("installer");
             profile.put("processName", "org.example." + operation + ":worker");
             profile.putObject("processCredentials").put("euid", operation.equals("first") ? 11001 : 11002)
                     .put("gid", 20001).put("egid", 20002).putArray("groups").add(3003).add(9997);

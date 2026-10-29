@@ -143,6 +143,8 @@ public final class RuntimeFixture implements WorkerEntrypoint {
         assertEquals(android.os.Process.myUid(), application.getApplicationInfo().uid);
         assertEquals(android.os.Process.myUid(), application.getPackageManager().getApplicationInfo(application.getPackageName(), 0).uid);
         assertEquals(application.getPackageName(), application.getPackageManager().getPackageInfo(application.getPackageName(), 0).packageName);
+        assertEquals("org.example.installer", application.getPackageManager().getInstallerPackageName(application.getPackageName()));
+        assertEquals(null, application.getPackageManager().getInstallerPackageName("org.example.sideloaded"));
         AndroidEmulator emulator = session.createEmulator(() -> AndroidEmulatorBuilder.for64Bit()
                 .addBackendFactory(new Unicorn2Factory(false)).build());
         AndroidResolver resolver = new AndroidResolver(23);

@@ -22,13 +22,13 @@ Runtime 1.2.2 的 Android 模式通过 `profile.package` 配置唯一宿主，�
 | `flags` | 32 位 integer | `ApplicationInfo.flags` |
 | `nativeLibraryDir` | string | `ApplicationInfo.nativeLibraryDir` |
 | `signatures` | string 数组 | Base64 编码的签名证书 DER，投影至 `PackageInfo.signatures` |
-| `installer` | string | `PackageManager.setInstallerPackageName` |
+| `installer` | string 或 null | `PackageManager.setInstallerPackageName` |
 | `requestedPermissions` | string 数组或 null | `PackageInfo.requestedPermissions` |
 | `requestedPermissionsFlags` | 32 位 integer 数组或 null | `PackageInfo.requestedPermissionsFlags` |
 
 提供 `apk` 时，库通过 `io.github.ai-repo-save.apk-parser:apk-parser:2.6.11` 派生 `name`、`versionName`、`versionCode` 和 APK 声明的 `targetSdk`，通过 apksig 派生 `signatures`。显式提供的同名字段必须与派生结果一致，冲突时拒绝启动。附加包复用相同的解析和冲突检查。
 
-未提供的字段保留现有框架对象或新对象的初始值。库不按机型或包名补齐包事实。公开的 `installPackage` 会设置 `FLAG_INSTALLED`，并为缺失的包名、进程名和目标 SDK 应用 Robolectric 自身的安装语义。
+未提供的字段保留现有框架对象或新对象的初始值。省略 `installer` 时保留框架的安装来源状态；显式 `null` 按 [Android 11 PackageManager.setInstallerPackageName 合同](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-11.0.0_r1/core/java/android/content/pm/PackageManager.java#6319) 清除安装来源关联，`getInstallerPackageName` 返回 `null`。库不按机型或包名补齐包事实。公开的 `installPackage` 会设置 `FLAG_INSTALLED`，并为缺失的包名、进程名和目标 SDK 应用 Robolectric 自身的安装语义。
 
 宿主 `apk` 供框架读取物理资源。宿主 `guestSourceDir` 在 Application 初始化前成为 Context、ApplicationInfo、PackageManager 和 ApkAssets 的可见来源身份，native IO 将该路径挂载到同一物理 APK。省略时保留框架使用物理来源路径的行为。附加包 `apk` 仅作为元数据来源，不加载其 DEX，也不创建 Application；附加包清单不创建文件挂载。
 

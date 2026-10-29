@@ -68,7 +68,7 @@ final class PackageInventoryProjection {
         permissions(info, profile, field);
         packages.installPackage(info);
         if (profile.has("installer")) application.getPackageManager().setInstallerPackageName(info.packageName,
-                ProfileValues.text(profile.required("installer"), field + ".installer"));
+                profile.required("installer").isNull() ? null : ProfileValues.text(profile.required("installer"), field + ".installer"));
         LOG.info("event=package_profile_installed package={} source={} signatures={} requestedPermissions={}", info.packageName, field,
                 info.signatures == null ? null : info.signatures.length, info.requestedPermissions == null ? null : info.requestedPermissions.length);
     }
