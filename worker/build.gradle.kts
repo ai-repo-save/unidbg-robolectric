@@ -29,4 +29,22 @@ application {
     )
 }
 
+val compileDeviceEgl = tasks.register<Exec>("compileDeviceEgl") {
+    val source = layout.projectDirectory.file("src/main/native/device_egl.c")
+    val output = layout.buildDirectory.file("generated/resources/device-egl/native/linux-x86_64/libdevice-egl.so")
+    inputs.file(source)
+    outputs.file(output)
+    doFirst { output.get().asFile.parentFile.mkdirs() }
+    commandLine(
+        "gcc", "-shared", "-fPIC", "-O2",
+        "-o", output.get().asFile.absolutePath,
+        source.asFile.absolutePath,
+    )
+}
+
+tasks.named<ProcessResources>("processResources") {
+    dependsOn(compileDeviceEgl)
+    from(layout.buildDirectory.dir("generated/resources/device-egl"))
+}
+
 apply(from = "gradle/distribution.gradle.kts")

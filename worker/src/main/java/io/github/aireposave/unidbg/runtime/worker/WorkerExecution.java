@@ -50,6 +50,12 @@ public final class WorkerExecution {
                         log.info("event=application_metadata_resolved package={} version={} effectiveRequest={}",
                                 effective.path("profile").path("package").path("name").asText(),
                                 effective.path("profile").path("package").path("versionName").asText(), effectivePath);
+                        String acquireKey = "org.robolectric.packagesToNotAcquire";
+                        String eglPackage = "io.github.aireposave.unidbg.runtime.egl.";
+                        String excluded = System.getProperty(acquireKey, "");
+                        if (!excluded.contains(eglPackage)) {
+                            System.setProperty(acquireKey, excluded.isEmpty() ? eglPackage : excluded + "," + eglPackage);
+                        }
                         var bootstrap = JUnitCore.runClasses(AndroidBootstrap.class);
                         if (!bootstrap.wasSuccessful()) {
                             Exception failure = new Exception("Android lifecycle failed");
