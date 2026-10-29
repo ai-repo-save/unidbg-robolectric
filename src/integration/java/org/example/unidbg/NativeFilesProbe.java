@@ -1,6 +1,7 @@
 package org.example.unidbg;
 
 import android.app.Application;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.unidbg.AndroidEmulator;
 import com.github.unidbg.Emulator;
 import com.github.unidbg.Module;
@@ -31,6 +32,7 @@ import static org.junit.Assert.*;
 final class NativeFilesProbe {
     static void verify(AndroidEmulator emulator, AndroidResolver resolver, Application application,
                        WorkerSession session, String model, Arm64Jni jni) throws Exception {
+        verifyPaths(application, session, jni);
         var libc = emulator.getMemory().load(resolver.resolveLibrary(emulator, "libc.so"), false);
         var memory = emulator.getMemory().malloc(65536, true);
         try {
@@ -78,6 +80,24 @@ final class NativeFilesProbe {
             verifyQueries(emulator, application, session, jni, libc, pointer);
         } finally { memory.free(); }
     }
+    private static void verifyPaths(Application application, WorkerSession session, Arm64Jni jni) throws Exception {
+        String data = application.getDataDir().getPath();
+        String guestData = session.profile().required("filesystem").required("guestDataDirectory").textValue();
+        String[] paths = {"", "relative\0path", "relative//./child/../leaf/", "/outside//./child/../leaf/",
+                guestData + "/files/\0leaf", data + "-sibling/\0leaf", data + "\0suffix", data, data + "///",
+                data + "//files/./child/../leaf/", data + "/files/\0leaf", data + "/../sibling", data + "/."};
+        var json = new ObjectMapper();
+        var results = json.createObjectNode();
+        var constructed = results.putArray("constructed");
+        var wrapped = results.putArray("wrapped");
+        for (String path : paths) {
+            int file = jni.newObject("java/io/File", "(Ljava/lang/String;)V", jni.wrap(path));
+            constructed.add((String) jni.value(jni.objectCall(file, "getPath", "()Ljava/lang/String;")));
+            wrapped.add((String) jni.value(jni.objectCall(jni.wrap(new File(path)), "getPath", "()Ljava/lang/String;")));
+        }
+        json.writeValue(session.outputDirectory().resolve("file-paths.json").toFile(), results);
+    }
+
     private static void verifyQueries(AndroidEmulator emulator, Application application, WorkerSession session,
                                       Arm64Jni jni, Module libc, Pointer buffer) throws Exception {
         String guestData = session.profile().required("filesystem").required("guestDataDirectory").textValue();

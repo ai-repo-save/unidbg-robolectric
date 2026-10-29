@@ -42,8 +42,10 @@ final class GuestFiles implements IOResolver<AndroidFileIO> {
     }
 
     String guestPath(File file) {
-        Path path = file.toPath();
-        return path.startsWith(data) ? Path.of(guestData).resolve(data.relativize(path)).toString() : file.getPath();
+        String path = file.getPath();
+        String hostData = data.toString();
+        if (path.equals(hostData)) return guestData;
+        return path.startsWith(hostData + "/") ? guestData + path.substring(hostData.length()) : path;
     }
 
     void install(AndroidEmulator emulator) {

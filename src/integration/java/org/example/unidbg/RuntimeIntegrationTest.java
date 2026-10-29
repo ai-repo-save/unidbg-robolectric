@@ -1,5 +1,6 @@
 package org.example.unidbg;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.aireposave.unidbg.runtime.client.RunRequest;
 import io.github.aireposave.unidbg.runtime.client.RunResult;
@@ -77,6 +78,11 @@ public final class RuntimeIntegrationTest {
             RunResult result = complete(handle);
             assertEquals(result.failure().toString(), RunResult.Status.COMPLETED, result.status());
             assertEquals(handle.pid(), result.payload().required("pid").longValue());
+            var expectedPaths = expectedFilePaths(Files.readString(handle.outputDirectory().resolve("application-data.location")),
+                    request.profile().required("filesystem").required("guestDataDirectory").textValue());
+            var actualPaths = JSON.readTree(handle.outputDirectory().resolve("file-paths.json").toFile());
+            assertEquals(expectedPaths, actualPaths.required("constructed"));
+            assertEquals(expectedPaths, actualPaths.required("wrapped"));
             assertEquals(false, handle.pid() == ProcessHandle.current().pid());
             assertEquals("org.example." + label, result.payload().required("package").textValue());
             assertEquals("JNI-model-" + label, Files.readString(handle.outputDirectory().resolve("observed-model")));
@@ -127,6 +133,15 @@ public final class RuntimeIntegrationTest {
                 Duration.ofMillis(operation.equals("blocked") ? 50 : 1000), Duration.ofSeconds(5), java.util.Map.of(),
                 UUID.randomUUID().toString().replace("-", ""));
     }
+    private static JsonNode expectedFilePaths(String data, String guestData) {
+        String[] paths = {"", "relative\0path", "relative//./child/../leaf/", "/outside//./child/../leaf/",
+                guestData + "/files/\0leaf", data + "-sibling/\0leaf", data + "\0suffix", guestData, guestData,
+                guestData + "/files/./child/../leaf", guestData + "/files/\0leaf", guestData + "/../sibling", guestData + "/."};
+        var expected = JSON.createArrayNode();
+        for (String path : paths) expected.add(new File(path).getPath());
+        return expected;
+    }
+
     private static RunResult complete(SessionHandle handle) throws Exception { return handle.completion().get(90, TimeUnit.SECONDS); }
     private static void assertClosed(SessionHandle handle) throws Exception {
         assertEquals("closed", Files.readString(handle.outputDirectory().resolve("resource-closed")));
