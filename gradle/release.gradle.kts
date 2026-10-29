@@ -27,8 +27,8 @@ val writeReleaseManifest = tasks.register("writeReleaseManifest") {
             "sourceCommit" to commit,
             "coordinates" to listOf("client", "spi", "worker").map { "io.github.ai-repo-save:unidbg-robolectric-$it:$releaseVersion" },
             "dependencyCoordinates" to listOf("io.github.ai-repo-save.unidbg:*:0.13.1",
-                "io.github.ai-repo-save.robolectric:robolectric:1.2.0",
-                "io.github.ai-repo-save.robolectric:shadows-framework:1.2.0",
+                "io.github.ai-repo-save.robolectric:robolectric:1.3.0",
+                "io.github.ai-repo-save.robolectric:shadows-framework:1.3.0",
                 "io.github.ai-repo-save.apk-parser:apk-parser:2.6.11")
         ))))
     }

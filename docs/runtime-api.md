@@ -1,6 +1,6 @@
 # Runtime 1.2.2 公共合同
 
-坐标为 `io.github.ai-repo-save:unidbg-robolectric-{client,spi,worker}:1.2.2`，JDK 21。业务实现依赖 SPI；父进程仅依赖 client。worker distribution 提供执行环境与离线 API 30 SDK。底座为 `io.github.ai-repo-save.unidbg:*:0.13.1`；唯一 Robolectric core 为 `io.github.ai-repo-save.robolectric:robolectric:1.2.0`，正式传递依赖完整 `io.github.ai-repo-save.robolectric:shadows-framework:1.2.0`，替代官方同名 framework；其他官方支持模块保持 4.17。
+坐标为 `io.github.ai-repo-save:unidbg-robolectric-{client,spi,worker}:1.2.2`，JDK 21。业务实现依赖 SPI；父进程仅依赖 client。worker distribution 提供执行环境与离线 API 30 SDK。底座为 `io.github.ai-repo-save.unidbg:*:0.13.1`；唯一 Robolectric core 为 `io.github.ai-repo-save.robolectric:robolectric:1.3.0`，正式传递依赖完整 `io.github.ai-repo-save.robolectric:shadows-framework:1.3.0`，替代官方同名 framework；其他官方支持模块保持 4.17。
 
 ## 工作入口
 
@@ -109,7 +109,7 @@ Android 模式提供 `package.name` 或单独提供 `package.apk`。`apk` 是所
 
 `createVm(emulator, moduleApk, jni)` 的模块 APK 独立于此来源。例如 DroidGuard 下载 VM 的 APK 包不是宿主 GMS，不能将它当作 package.apk 来重定义 Application 身份。
 
-可选 package 字段还有 `signatures`（Base64 证书 DER 数组）、`installer`、`flags`、`nativeLibraryDir`、`guestSourceDir` 和成对采集的 `requestedPermissions` / `requestedPermissionsFlags`。权限两数组按索引平行，必须等长或同时为 null；库保留采集的 flags，不从 APK 声明推导授权状态。`packages` 数组提供附加已安装包，复用相同元数据投影，不改变宿主身份；重复包名或与宿主重名时拒绝启动。完整字段语义见 `docs/package-profile.md`。物理 `apk` 用于宿主资源/元数据，`guestSourceDir` 是 native IO 的显式文件挂载别名。包身份和 APK 路径由 core 的公开 applicationPackageName/applicationProcessName/applicationSourceDir 配置在 Package、ApplicationInfo、BoundApplication 和 LoadedApk 初始化处建立。进程真实 UID 由官方 TestEnvironmentLifecyclePlugin.onSetupApplicationState 在绑定前调用 ShadowProcess.setUid；未提供时保持 Android 框架原默认。Application 使用官方 base；其他包元数据在 onCreate 中通过公开字段和 PM shadow 配置。
+可选 package 字段还有 `signatures`（Base64 证书 DER 数组）、`installer`、`flags`、`nativeLibraryDir`、`guestSourceDir` 和成对采集的 `requestedPermissions` / `requestedPermissionsFlags`。权限两数组按索引平行，必须等长或同时为 null；库保留采集的 flags，不从 APK 声明推导授权状态。`packages` 数组提供附加已安装包，复用相同元数据投影，不改变宿主身份；重复包名或与宿主重名时拒绝启动。完整字段语义见 `docs/package-profile.md`。物理 `apk` 用于宿主资源/元数据；`guestSourceDir` 同时提供 Java 可见的来源身份与 native APK 挂载路径，省略时保持框架的物理来源路径行为。包名和进程名由 core 的公开 applicationPackageName/applicationProcessName 配置建立；早期生命周期通过 RuntimeEnvironment.setApplicationPackageSource 传入物理 APK 与可见来源，在 Package、ApplicationInfo 和 LoadedApk 初始化处建立路径。API 30 Java binary resources 在实际 ZIP 装载处使用物理 APK，ApkAssets 保留可见身份。进程真实 UID 由官方 TestEnvironmentLifecyclePlugin.onSetupApplicationState 在绑定前调用 ShadowProcess.setUid；未提供时保持 Android 框架原默认。Application 使用官方 base；其他包元数据在 onCreate 中通过公开字段和 PM shadow 配置。
 
 `processCredentials` 是可选对象，供 native 身份 syscall 与文件权限查询共用。`uid`、`euid`、`gid`、`egid` 分别表示真实 UID、有效 UID、真实 GID、有效 GID，均为非负 32 位整数。`groups` 是补充 GID 数组，元素为非负 32 位整数；显式空数组表示无补充组。`uid` 省略时使用已有 `package.uid`，两者同时提供时必须相同；其余字段缺失保持未知，不从 UID 推导 GID、有效身份或补充组。配置的真实 UID 同时用于 Android `Process.myUid()`。缺失凭据不阻止启动；请求该身份或需要该权限事实时，底座抛出 `UnsupportedOperationException`，runtime 不补成 root。
 
@@ -161,7 +161,7 @@ Settings 支持 global / secure / system，值是字符串或 null。偏好支�
 
 `configureVm` 通过现有精确 JNI handler 接入 `java.io.File` 的无参 `exists`、`isFile`、`isDirectory`、`canRead`、`canWrite`、`canExecute`、`length`、`lastModified`、`list` 和 `listFiles`。查询使用该 VM 的 `AndroidSyscallHandler.queryMetadataAt/checkAccessAt/listDirectoryAt`，路径解析、权限判断和供给选择均由底座负责。JNI `File.getPath()` 将已声明的 Application 数据路径投影为 guestDataDirectory；`listFiles()` 返回同一 guest 目录下的 File。构造器和其他 JNI 成员继续默认 Proxy 行为。
 
-底座确认的 errno 按 Java File 返回约定转换为 false、0 或 null，并在 debug 查询事件保留 errno。未知事实或所需字段缺失传播 `UnsupportedOperationException`，进入已有 FAILED 观察与工作入口异常边界。普通 Java 回调内部直接调用 JDK File 仍使用宿主文件系统；本适配只覆盖上述 JNI 边界。物理 APK 来源与 guestSourceDir 身份分离不由此接口处理。native resolver API、rootfs、自定义 syscall 和 ELF 策略仍由 worker-local consumer factory 决定，不由 androidSdk 推导。
+底座确认的 errno 按 Java File 返回约定转换为 false、0 或 null，并在 debug 查询事件保留 errno。未知事实或所需字段缺失传播 `UnsupportedOperationException`，进入已有 FAILED 观察与工作入口异常边界。普通 Java 回调内部直接调用 JDK File 仍使用宿主文件系统；本适配只覆盖上述 JNI 边界。物理 APK 来源与 guestSourceDir 身份由早期 ApplicationPackageSource 初始化分离。native resolver API、rootfs、自定义 syscall 和 ELF 策略仍由 worker-local consumer factory 决定，不由 androidSdk 推导。
 
 ## CLI 与既有入口
 

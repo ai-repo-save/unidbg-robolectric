@@ -113,7 +113,7 @@ dependencies {
     add(integration.implementationConfigurationName, "junit:junit:4.13.2")
     add(integration.implementationConfigurationName, project(":client"))
     add(integration.implementationConfigurationName, project(":spi"))
-    add(integration.implementationConfigurationName, "io.github.ai-repo-save.robolectric:robolectric:1.2.0")
+    add(integration.implementationConfigurationName, "io.github.ai-repo-save.robolectric:robolectric:1.3.0")
     add(integration.implementationConfigurationName, "org.robolectric:android-all:11-robolectric-6757853")
     add(integration.implementationConfigurationName, "io.github.ai-repo-save.unidbg:unidbg-android:0.13.1") {
         exclude(group = "net.dongliu", module = "apk-parser")

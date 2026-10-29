@@ -13,7 +13,8 @@ Runtime 1.2.2 的 Android 模式通过 `profile.package` 配置唯一宿主，�
 | 字段 | JSON 类型 | 来源或投影目标 |
 | --- | --- | --- |
 | `name` | string | `PackageInfo.packageName`、`ApplicationInfo.packageName` |
-| `apk` | string | 存在的绝对 APK 路径，用于解析元数据与验证签名 |
+| `apk` | string | 存在的绝对 APK 路径，用于解析元数据、验证签名与装载宿主资源 |
+| `guestSourceDir` | string | 宿主的 Android 可见来源路径及 native APK 挂载路径 |
 | `versionName` | string 或 null | `PackageInfo.versionName` |
 | `versionCode` | 64 位 integer | `PackageInfo.setLongVersionCode` |
 | `targetSdk` | 32 位 integer | `ApplicationInfo.targetSdkVersion` |
@@ -29,7 +30,7 @@ Runtime 1.2.2 的 Android 模式通过 `profile.package` 配置唯一宿主，�
 
 未提供的字段保留现有框架对象或新对象的初始值。库不按机型或包名补齐包事实。公开的 `installPackage` 会设置 `FLAG_INSTALLED`，并为缺失的包名、进程名和目标 SDK 应用 Robolectric 自身的安装语义。
 
-宿主 `apk` 同时供框架装载宿主资源。附加包 `apk` 仅作为元数据来源，不加载其 DEX，也不创建 Application。宿主 `guestSourceDir` 是 native IO 的显式挂载别名；附加包清单不创建文件挂载。
+宿主 `apk` 供框架读取物理资源。宿主 `guestSourceDir` 在 Application 初始化前成为 Context、ApplicationInfo、PackageManager 和 ApkAssets 的可见来源身份，native IO 将该路径挂载到同一物理 APK。省略时保留框架使用物理来源路径的行为。附加包 `apk` 仅作为元数据来源，不加载其 DEX，也不创建 Application；附加包清单不创建文件挂载。
 
 ## 签名验证
 

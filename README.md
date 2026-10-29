@@ -8,7 +8,7 @@
 - `io.github.ai-repo-save:unidbg-robolectric-spi:1.2.2`：工作入口、资源登记、JNI handler / owner delegate / observer。
 - `io.github.ai-repo-save:unidbg-robolectric-worker:1.2.2`：官方 Android 生命周期的工作入口 JAR。
 - 底座为 `io.github.ai-repo-save.unidbg:*:0.13.1`，保留原 Java 包和 native JNI 名称。
-- Robolectric core 为 `io.github.ai-repo-save.robolectric:robolectric:1.2.0`，正式传递依赖完整 `io.github.ai-repo-save.robolectric:shadows-framework:1.2.0`，替代官方同名框架制品；其余官方支持模块为 4.17。Android 11 / API 30，SDK 为 `android-all-instrumented:11-robolectric-6757853-i7`。
+- Robolectric core 为 `io.github.ai-repo-save.robolectric:robolectric:1.3.0`，正式传递依赖完整 `io.github.ai-repo-save.robolectric:shadows-framework:1.3.0`，替代官方同名框架制品；其余官方支持模块为 4.17。Android 11 / API 30，SDK 为 `android-all-instrumented:11-robolectric-6757853-i7`。
 
 支持 Linux x86-64、ARM64 Unicorn2。native resolver API、rootfs、自定义 emulator/syscall、有序 ELF 装载、post-map hooks、JNI_OnLoad 和业务回调由工作入口决定。native-only 不初始化 Robolectric，也不要求预插桩 SDK 目录。
 
@@ -28,14 +28,20 @@
 )
 ```
 
-Robolectric fork 仓库为 `https://github.com/ai-repo-save/robolectric`，core 与完整 framework shadows 均要求 `1.2.0`，源码提交为 `6395ac1d4284b661b58ffd889baffccb998eb5b3`，由两个制品各自的 `*-1.2.0.provenance.json` 记录。完整 framework 在指定服务器 `root@192.168.50.8` 的 `/root/git/robolectric-runtime` 构建；从该提交的干净源码执行：
+Robolectric fork 仓库为 `https://github.com/ai-repo-save/robolectric`，core 与完整 framework shadows 均要求 `1.3.0`，包来源 API 的源码提交为 `786e1d627127434a6c31d86c1cafc031ab0f241c`，制品 POM 的 SCM tag 记录该来源。在 fork 的对应源码目录本地运行正式任务：
 
 ```sh
-uv run --script scripts/release-local.py \
-  --java-home /usr/lib/jvm/java-21-openjdk-amd64 --no-proxy
+JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ./gradlew \
+  --offline --max-workers=2 -PsdkCheckApis=30 \
+  :robolectric:identityIntegrationTest \
+  --tests org.robolectric.StartupIdentityIntegrationTest \
+  :shadows-framework:publishRuntimeShadowsPublicationToRuntimeLocalRepository \
+  :robolectric:publishRuntimeCorePublicationToRuntimeLocalRepository
 ```
 
-将服务器 `build/repository` 中的两个正式 fork 制品及各自 provenance 保持 Maven-layout 提供给 runtime 构建，通过 `-ProbolectricRepository=/path/to/robolectric-release-repository` 解析。使用本地 Maven 时，须先将这两个已发布制品安装齐备。core 的 POM 和 Gradle metadata 已指向 fork framework；消费者只解析这一份 framework，不叠加 `org.robolectric:shadows-framework:4.17`。依赖正式发行齐备后再构建 runtime，不以相邻源码或旧制品替代。
+该命令完整编译两个模块，annotation processor 保持 ERROR，仅验证 API 30；不声明通过 API 23–37 检查。依赖未缓存时，通过显式 Gradle 代理参数联网准备所选依赖。
+
+将 `build/repository` 中的两个正式 fork 制品及标准元数据保持 Maven-layout 提供给 runtime 构建，通过 `-ProbolectricRepository=/path/to/robolectric-release-repository` 解析。core 的 POM 和 Gradle metadata 已指向 fork framework；消费者只解析这一份 framework，不叠加 `org.robolectric:shadows-framework:4.17`。依赖正式发行齐备后再构建 runtime，不以相邻源码或旧制品替代。
 
 APK 元数据解析使用 `io.github.ai-repo-save.apk-parser:apk-parser:2.6.11`。该 fork 以原版 2.6.10 为基线，纳入官方已合并的空资源表修复；源码为 `https://github.com/ai-repo-save/apk-parser`。先按该仓 `docs/empty-resource-table.md` 发布独立 Maven-layout，再通过 `-PapkParserRepository` 提供。SPI 的 unidbg 依赖边排除原版 `net.dongliu:apk-parser`，同一依赖图只保留 fork。
 
@@ -59,7 +65,7 @@ Android 会话启动使用离线 API 30 SDK。runtime-manifest 记录版本、�
 
 `jniIntegration` 是发行整体集成入口，不进入默认 test/check。每次运行重新执行，XML/HTML 与工作会话产物保存在独立 `build/1.2.2/evidence/<UTC 时间>/`。运行日志为 stderr 和每会话 `logs/worker.jsonl`；原始诊断、完整工作 JVM maps、Android 数据副本与结果文件分别保存。证据保留到显式 clean；活动 worker 期间不 clean 或覆盖安装。
 
-仅验证 APK 元数据解析和 Android worker 启动时，显式运行 `apkStartupIntegration`，并提供 `-PstartupApk=/absolute/path/to/original.apk` 与依赖仓库参数。该测试只传见证 classes 目录，记录实际 parser 类资源来源和完整资源列表，独立读取 worker 写出的随机内容见证；不执行 native/JNI 场景。
+使用真实 APK 验证来源分离时，显式运行 `apkStartupIntegration --tests org.example.unidbg.ApkStartupIntegrationTest`，并提供 `-PstartupApk=/absolute/path/to/original.apk` 与依赖仓库参数。该测试记录 parser 来源、六个 Java 来源路径、六个真实 ARM64 JNI 来源路径和 ApkAssets 路径。外部进程独立比较 AssetManager 读取的 ZIP 条目字节，以及 native libc 从 guest 路径读取完整 APK 的 SHA-256。它不加载应用 SO，也不访问设备。
 
 构建使用 Gradle 9.5.0 官方 wrapper，发行下载校验由 wrapper 处理。
 
@@ -95,6 +101,6 @@ Docker 可通过明确的 Maven-layout 和 offline distribution 命名 context �
 
 包身份由轻量 Robolectric fork 在官方 Package/BoundApplication 初始化处建立；UID 使用官方 early lifecycle plugin。库不通过替代 Context 或默认 `org.robolectric.default` 冒充业务身份。
 
-`package.apk` 是宿主 Application 元数据源；加载模块 APK 可不同，`createDalvikVM(apk)` 不执行 DEX。文件挂载明确区分 host 实际路径与 guest 别名，不改写 File.getPath，不按 JNI 签名伪造 File。基础映射覆盖实际 open/read/write 路径，不声称替代完整设备文件系统或所有 syscall。
+`package.apk` 是宿主 Application 的物理资源与元数据源；可选 `package.guestSourceDir` 在框架初始化时建立 Java 来源身份，并供 native 挂载同一 APK。未提供 guestSourceDir 时保持框架的物理来源路径行为。加载模块 APK 可不同，`createDalvikVM(apk)` 不执行 DEX。基础映射覆盖实际 open/read/write 路径，不声称替代完整设备文件系统或所有 syscall。
 
 API 30 的被动 maps 快照不证明 Robolectric native runtime 与 Unicorn 共存。未验证任意 APK Java/资源执行、真实设备硬件服务、跨 JVM 偏好恢复、Build/PM 自动 reset、多 SDK 或多 sandbox 同进程。业务算法、原始 native fixtures、时钟/熵策略、软件 AndroidKeyStore 和应用 JNI 留在调用项目。
