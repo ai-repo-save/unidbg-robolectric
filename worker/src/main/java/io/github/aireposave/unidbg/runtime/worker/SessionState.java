@@ -3,6 +3,8 @@ package io.github.aireposave.unidbg.runtime.worker;
 import android.app.Application;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.github.unidbg.AndroidEmulator;
+import com.github.unidbg.linux.AndroidSyscallHandler;
+import com.github.unidbg.linux.GuestCredentials;
 import com.github.unidbg.linux.android.dvm.VM;
 import io.github.aireposave.unidbg.runtime.spi.WorkerSession;
 import io.github.aireposave.unidbg.runtime.spi.jni.JniConfiguration;
@@ -26,6 +28,8 @@ final class SessionState extends WorkerSession {
     private static final Logger LOG = LoggerFactory.getLogger(SessionState.class);
     private final JsonNode request;
     private final Application application;
+    private final GuestFiles guestFiles;
+    private final GuestCredentials credentials;
     private final ArrayDeque<AutoCloseable> resources = new ArrayDeque<>();
     private final IdentityHashMap<AutoCloseable, Boolean> owned = new IdentityHashMap<>();
     private final IdentityHashMap<AndroidEmulator, Boolean> configured = new IdentityHashMap<>();
@@ -37,8 +41,10 @@ final class SessionState extends WorkerSession {
     SessionState(JsonNode request, Application application) throws IOException {
         this.request = request;
         this.application = application;
+        credentials = ProcessCredentialsProjection.resolve(profile());
         properties = ProfileProjection.nativeProperties(profile(), application != null);
         if (application != null) ProfileProjection.apply(application, profile(), properties);
+        guestFiles = application == null ? null : new GuestFiles(application, profile());
         bind();
         try {
             output = own(new ProtocolOutput(new FileOutputStream(FileDescriptor.out),
@@ -80,6 +86,7 @@ final class SessionState extends WorkerSession {
         return vm;
     }
     @Override public void configureVm(VM vm, JniConfiguration jni) {
+        GuestFileJni.install(vm, guestFiles, jni);
         RuntimeClassFactory factory = new RuntimeClassFactory(getClass().getClassLoader(), jni);
         vm.setDvmClassFactory(factory);
         vm.setJni(factory.jni());
@@ -87,8 +94,12 @@ final class SessionState extends WorkerSession {
 
     @Override public void configureEmulator(AndroidEmulator emulator) throws IOException {
         if (configured.putIfAbsent(emulator, true) != null) return;
+        ((AndroidSyscallHandler) emulator.getSyscallHandler()).setGuestCredentials(credentials);
+        LOG.info("event=guest_credentials_configured uid={} euid={} gid={} egid={} groups={}",
+                credentials.realUid, credentials.effectiveUid, credentials.realGid, credentials.effectiveGid,
+                credentials.supplementaryGroups);
         NativeProperties.install(emulator, properties);
-        if (application != null) GuestFiles.install(emulator, application, profile());
+        if (guestFiles != null) guestFiles.install(emulator);
         LOG.info("event=emulator_configured backend={} classLoader={} nativeProperties={}",
                 emulator.getBackend().getClass().getName(), emulator.getClass().getClassLoader(), properties);
     }

@@ -15,10 +15,12 @@ final class Arm64Jni implements AutoCloseable {
     private static final Logger LOG = LoggerFactory.getLogger(Arm64Jni.class);
     private static final int JNI_FIND_CLASS = 6;
     private static final int JNI_EXCEPTION_OCCURRED = 15;
+    private static final int JNI_NEW_OBJECT_A = 30;
     private static final int JNI_GET_OBJECT_CLASS = 31;
     private static final int JNI_GET_METHOD_ID = 33;
     private static final int JNI_CALL_OBJECT_METHOD_A = 36;
     private static final int JNI_CALL_BOOLEAN_METHOD_A = 39;
+    private static final int JNI_CALL_LONG_METHOD_A = 54;
     private static final int JNI_GET_FIELD_ID = 94;
     private static final int JNI_GET_OBJECT_FIELD = 95;
     private static final int JNI_GET_STATIC_METHOD_ID = 113;
@@ -68,6 +70,18 @@ final class Arm64Jni implements AutoCloseable {
         namePointer.setString(0, name);
         descriptorPointer.setString(0, descriptor);
         return invoke(index, env, type, namePointer, descriptorPointer);
+    }
+
+    int newObject(String typeName, String descriptor, int... args) {
+        int type = type(typeName);
+        return invoke(JNI_NEW_OBJECT_A, env, type,
+                member(type, JNI_GET_METHOD_ID, "<init>", descriptor), arguments(args));
+    }
+
+    long longCall(int receiver, String name, String descriptor, int... args) {
+        int type = invoke(JNI_GET_OBJECT_CLASS, env, receiver);
+        return callNative(JNI_CALL_LONG_METHOD_A, env, receiver,
+                member(type, JNI_GET_METHOD_ID, name, descriptor), arguments(args)).longValue();
     }
 
     int objectCall(int receiver, String name, String descriptor, int... args) {
@@ -123,7 +137,7 @@ final class Arm64Jni implements AutoCloseable {
     }
 
     Object value(int reference) {
-        return reference == 0 ? null : vm.getObject(reference).getValue();
+        return ProxyDvmObject.unpack(vm.getObject(reference));
     }
 
     private Pointer arguments(int[] args) {

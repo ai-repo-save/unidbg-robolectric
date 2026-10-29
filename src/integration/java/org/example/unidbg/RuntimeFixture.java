@@ -263,7 +263,7 @@ public final class RuntimeFixture implements WorkerEntrypoint {
             assertArrayEquals(publicKey.getEncoded(), (byte[]) jni.value(jni.objectCall(jni.wrap(publicKey), "getEncoded", "()[B")));
             assertEquals("owner", jni.value(jni.staticObjectCall("example/Callback", "owner", "()Ljava/lang/String;")));
             assertEquals("exact", jni.value(jni.staticObjectCall("example/Callback", "exact", "()Ljava/lang/String;")));
-            NativeFilesProbe.verify(emulator, resolver, application, session, model);
+            NativeFilesProbe.verify(emulator, resolver, application, session, model, jni);
         }
         return JSON.createObjectNode().put("package", application.getPackageName()).put("model", session.profile().path("build").path("MODEL").asText())
                 .put("pid", ProcessHandle.current().pid());

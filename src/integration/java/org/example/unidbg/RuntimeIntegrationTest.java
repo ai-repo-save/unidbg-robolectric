@@ -82,6 +82,10 @@ public final class RuntimeIntegrationTest {
             assertEquals("JNI-model-" + label, Files.readString(handle.outputDirectory().resolve("observed-model")));
             assertArrayEquals(("native-JNI-model-" + label).getBytes(StandardCharsets.UTF_8),
                     Files.readAllBytes(handle.outputDirectory().resolve("application-data/files/cross-boundary.bin")));
+            assertArrayEquals("file-query-content".getBytes(StandardCharsets.UTF_8),
+                    Files.readAllBytes(handle.outputDirectory().resolve("query-content.bin")));
+            assertArrayEquals("open-1open-2".getBytes(StandardCharsets.UTF_8),
+                    Files.readAllBytes(handle.outputDirectory().resolve("controlled-query.bin")));
             try (var entries = Files.walk(handle.outputDirectory().resolve("native-read"))) {
                 for (Path path : entries.filter(Files::isRegularFile).toList()) {
                     Path relative = handle.outputDirectory().resolve("native-read").relativize(path);
@@ -101,6 +105,8 @@ public final class RuntimeIntegrationTest {
             profile.putObject("package").put("name", "org.example." + operation).put("versionName", "1.0").put("versionCode", 1).put("targetSdk", 30)
                     .put("uid", operation.equals("first") ? 10001 : 10002);
             profile.put("processName", "org.example." + operation + ":worker");
+            profile.putObject("processCredentials").put("euid", operation.equals("first") ? 11001 : 11002)
+                    .put("gid", 20001).put("egid", 20002).putArray("groups").add(3003).add(9997);
             profile.putObject("settings").putObject("global").put("library_seed", "seed-" + operation);
             profile.putObject("preferences").putObject("seeded").put("initial", "seeded-" + operation);
             var build = profile.putObject("build").put("MODEL", "JNI-model-" + operation)

@@ -3,46 +3,83 @@ package io.github.aireposave.unidbg.runtime.worker;
 import android.app.Application;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.github.unidbg.AndroidEmulator;
+import com.github.unidbg.Emulator;
+import com.github.unidbg.file.DirectoryEntry;
+import com.github.unidbg.file.FileMetadata;
+import com.github.unidbg.file.FileQueryResult;
 import com.github.unidbg.file.FileResult;
+import com.github.unidbg.file.HostFileFacts;
+import com.github.unidbg.file.IOResolver;
 import com.github.unidbg.file.linux.AndroidFileIO;
 import com.github.unidbg.file.linux.IOConstants;
 import com.github.unidbg.linux.file.DirectoryFileIO;
 import com.github.unidbg.linux.file.SimpleFileIO;
 import com.github.unidbg.unix.UnixEmulator;
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.LinkedHashMap;
+import java.util.List;
 import org.slf4j.LoggerFactory;
 
-final class GuestFiles {
+final class GuestFiles implements IOResolver<AndroidFileIO> {
     private static final int O_TRUNC = 0x200;
-    static void install(AndroidEmulator emulator, Application application, JsonNode profile) {
-        var mounts = new LinkedHashMap<String, Path>();
-        Path data = application.getDataDir().toPath();
-        String guestData = profile.path("filesystem").path("guestDataDirectory").asText("/data/user/0/" + application.getPackageName());
+    private final LinkedHashMap<String, Path> mounts = new LinkedHashMap<>();
+    private final Path data;
+    private final String guestData;
+
+    GuestFiles(Application application, JsonNode profile) {
+        data = application.getDataDir().toPath();
+        guestData = profile.path("filesystem").path("guestDataDirectory").asText("/data/user/0/" + application.getPackageName());
         mounts.put(guestData, data);
         mounts.put(data.toString(), data);
         JsonNode pkg = profile.required("package");
         if (pkg.has("guestSourceDir")) {
             mounts.put(pkg.required("guestSourceDir").asText(), Path.of(pkg.required("apk").asText()));
         }
+    }
+
+    String guestPath(File file) {
+        Path path = file.toPath();
+        return path.startsWith(data) ? Path.of(guestData).resolve(data.relativize(path)).toString() : file.getPath();
+    }
+
+    void install(AndroidEmulator emulator) {
         mounts.forEach((guest, host) -> {
             if (!guest.startsWith("/") || !host.isAbsolute()) throw new IllegalArgumentException("Data mounts require absolute guest and host paths");
             LoggerFactory.getLogger(GuestFiles.class).info("event=file_mount_configured guest={} host={} source={}",
                     guest, host, host.equals(data) ? "Application.getDataDir" : "profile.package.apk");
         });
-        emulator.getSyscallHandler().addIOResolver((target, pathname, flags) -> {
-            for (var mount : mounts.entrySet()) {
-                if (pathname.equals(mount.getKey())) return open(mount.getValue(), pathname, flags);
-                if (Files.isDirectory(mount.getValue()) && pathname.startsWith(mount.getKey() + "/")) {
-                    return open(mount.getValue().resolve(pathname.substring(mount.getKey().length() + 1)), pathname, flags);
-                }
-            }
-            return null;
-        });
+        emulator.getSyscallHandler().addIOResolver(this);
     }
+
+    @Override public FileResult<AndroidFileIO> resolve(Emulator<AndroidFileIO> emulator, String pathname, int flags) {
+        Path host = hostPath(pathname);
+        return host == null ? null : open(host, pathname, flags);
+    }
+
+    @Override public FileQueryResult<FileMetadata> queryMetadata(Emulator<AndroidFileIO> emulator, String pathname, boolean followLinks) {
+        Path host = hostPath(pathname);
+        return host == null ? null : HostFileFacts.metadata(host.toFile(), followLinks);
+    }
+
+    @Override public FileQueryResult<List<DirectoryEntry>> queryDirectory(Emulator<AndroidFileIO> emulator, String pathname) {
+        Path host = hostPath(pathname);
+        return host == null ? null : HostFileFacts.directory(host.toFile());
+    }
+
+    private Path hostPath(String pathname) {
+        for (var mount : mounts.entrySet()) {
+            if (pathname.equals(mount.getKey())) return mount.getValue();
+            if (Files.isDirectory(mount.getValue()) && pathname.startsWith(mount.getKey() + "/")) {
+                return mount.getValue().resolve(pathname.substring(mount.getKey().length() + 1));
+            }
+        }
+        return null;
+    }
+
     private static FileResult<AndroidFileIO> open(Path host, String guest, int flags) {
         try {
             if (Files.exists(host) && (flags & IOConstants.O_CREAT) != 0 && (flags & IOConstants.O_EXCL) != 0) return FileResult.failed(UnixEmulator.EEXIST);
@@ -58,5 +95,4 @@ final class GuestFiles {
             return FileResult.success(new SimpleFileIO(flags, host.toFile(), guest));
         } catch (IOException failure) { throw new IllegalStateException("Guest file IO failed: " + guest + " -> " + host, failure); }
     }
-    private GuestFiles() {}
 }
