@@ -72,6 +72,19 @@ public final class RuntimeIntegrationTest {
         }
     }
 
+    @Test
+    public void standardInputUsesTheWorkerDescriptorAcrossConfigurationOrders() throws Exception {
+        Files.createDirectories(evidence);
+        try (SessionHandle handle = client.start(request("stdin", RunRequest.Mode.NATIVE_ONLY, runtime))) {
+            handle.send(JSON.getNodeFactory().numberNode(10));
+            RunResult result = complete(handle);
+            assertEquals(result.failure().toString(), RunResult.Status.COMPLETED, result.status());
+            assertEquals(handle.pid(), result.payload().required("pid").longValue());
+            assertArrayEquals(new byte[] {49, 48, 10}, Files.readAllBytes(handle.outputDirectory().resolve("stdin-content.bin")));
+            assertClosed(handle);
+        }
+    }
+
     private long android(String label) throws Exception {
         RunRequest request = request(label, RunRequest.Mode.ANDROID, runtime);
         try (SessionHandle handle = client.start(request)) {

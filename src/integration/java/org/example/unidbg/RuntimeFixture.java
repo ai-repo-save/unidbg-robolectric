@@ -10,6 +10,10 @@ import com.github.unidbg.AndroidEmulator;
 import com.github.unidbg.arm.backend.Unicorn2Factory;
 import com.github.unidbg.linux.android.AndroidEmulatorBuilder;
 import com.github.unidbg.linux.android.AndroidResolver;
+import com.github.unidbg.linux.AndroidSyscallHandler;
+import com.github.unidbg.linux.struct.Stat64;
+import com.github.unidbg.pointer.UnidbgPointer;
+import com.github.unidbg.unix.IO;
 import com.github.unidbg.linux.android.dvm.AbstractJni;
 import com.github.unidbg.linux.android.dvm.BaseVM;
 import com.github.unidbg.linux.android.dvm.DvmClass;
@@ -25,6 +29,9 @@ import io.github.aireposave.unidbg.runtime.spi.WorkerEntrypoint;
 import io.github.aireposave.unidbg.runtime.spi.WorkerSession;
 import io.github.aireposave.unidbg.runtime.spi.jni.JniConfiguration;
 import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
@@ -51,6 +58,7 @@ public final class RuntimeFixture implements WorkerEntrypoint {
             case "native" -> JSON.createObjectNode().put("android", session.androidEnabled()).put("pid", ProcessHandle.current().pid());
             case "fail" -> throw new java.io.IOException("Integration fixture failure");
             case "service" -> service(session);
+            case "stdin" -> stdin(session);
             case "cooperative", "cooperative-child" -> {
                 if (operation.equals("cooperative-child")) startChild(session, arguments);
                 else BlockingChild.signalReady(session.outputDirectory().resolve("ready"));
@@ -93,6 +101,71 @@ public final class RuntimeFixture implements WorkerEntrypoint {
             output.flush();
         }
         return JSON.createObjectNode().put("count", count);
+    }
+
+    private static JsonNode stdin(WorkerSession session) throws Exception {
+        InputStream original = System.in;
+        var observed = new ByteArrayOutputStream();
+        try {
+            for (boolean existing : new boolean[] {false, true}) {
+                AndroidEmulator emulator = existing
+                        ? session.own(AndroidEmulatorBuilder.for64Bit().addBackendFactory(new Unicorn2Factory(true)).build())
+                        : session.createEmulator(() -> AndroidEmulatorBuilder.for64Bit().addBackendFactory(new Unicorn2Factory(true)).build());
+                if (existing) {
+                    emulator.getMemory().setLibraryResolver(new AndroidResolver(23));
+                    session.configureEmulator(emulator);
+                } else {
+                    emulator.getMemory().setLibraryResolver(new AndroidResolver(23));
+                }
+                System.setIn(new ByteArrayInputStream(new byte[] {99}));
+                AndroidSyscallHandler handler = (AndroidSyscallHandler) emulator.getSyscallHandler();
+                var code = emulator.getMemory().mmap(4096, 7);
+                var memory = emulator.getMemory().malloc(4096, true);
+                try {
+                    var buffer = memory.getPointer();
+                    var expected = Files.readAttributes(Path.of("/proc/self/fd/" + IO.FD_STDIN), "unix:*");
+                    var facts = handler.queryMetadataAt(emulator, IO.FD_STDIN, "", 0x1000).value;
+                    assertEquals(((Number) expected.get("mode")).intValue(), facts.mode.getAsInt());
+                    assertEquals(010000, facts.mode.getAsInt() & 0170000);
+                    assertEquals(((Number) expected.get("ino")).longValue(), facts.ino.getAsLong());
+                    assertEquals(0, stdinCall(emulator, code, 80, IO.FD_STDIN, buffer.peer));
+                    Stat64 stat = new Stat64(buffer);
+                    stat.unpack();
+                    assertEquals(((Number) expected.get("mode")).intValue(), stat.st_mode);
+                    assertEquals(((Number) expected.get("ino")).longValue(), stat.st_ino);
+                    assertEquals(((Number) expected.get("size")).longValue(), stat.st_size);
+                    assertEquals(((Number) expected.get("dev")).longValue(), stat.st_dev);
+                    assertEquals(((Number) expected.get("rdev")).longValue(), stat.st_rdev);
+                    assertEquals(((Number) expected.get("uid")).intValue(), stat.st_uid);
+                    assertEquals(((Number) expected.get("gid")).intValue(), stat.st_gid);
+                    assertEquals(((Number) expected.get("nlink")).intValue(), stat.st_nlink);
+                    for (String path : new String[] {"relative/child", "null/cache"}) {
+                        buffer.setString(0, path);
+                        assertEquals(-20, stdinCall(emulator, code, 48, IO.FD_STDIN, buffer.peer, 0));
+                    }
+                    assertEquals(1, stdinCall(emulator, code, 63, IO.FD_STDIN, buffer.peer, 1));
+                    observed.write(buffer.getByte(0));
+                    assertEquals(99, System.in.read());
+                    assertEquals(0, stdinCall(emulator, code, 57, IO.FD_STDIN));
+                } finally {
+                    memory.free();
+                    emulator.getMemory().munmap(code.peer, 4096);
+                }
+            }
+            observed.write(session.input().read());
+            Files.write(session.outputDirectory().resolve("stdin-content.bin"), observed.toByteArray());
+            return JSON.createObjectNode().put("pid", ProcessHandle.current().pid());
+        } finally {
+            System.setIn(original);
+        }
+    }
+
+    private static int stdinCall(AndroidEmulator emulator, UnidbgPointer code, int number, Number... arguments) {
+        long offset = number * 16L;
+        code.setInt(offset, 0xd2800008 | (number << 5));
+        code.setInt(offset + 4, 0xd4000001);
+        code.setInt(offset + 8, 0xd65f03c0);
+        return emulator.eFunc(code.peer + offset, arguments).intValue();
     }
 
     public static final class JavaCallback {

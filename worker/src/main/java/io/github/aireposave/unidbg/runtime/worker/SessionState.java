@@ -3,9 +3,19 @@ package io.github.aireposave.unidbg.runtime.worker;
 import android.app.Application;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.github.unidbg.AndroidEmulator;
+import com.github.unidbg.Emulator;
+import com.github.unidbg.file.DirectoryEntry;
+import com.github.unidbg.file.FileMetadata;
+import com.github.unidbg.file.FileQueryResult;
+import com.github.unidbg.file.FileResult;
+import com.github.unidbg.file.IOResolver;
+import com.github.unidbg.file.linux.AndroidFileIO;
 import com.github.unidbg.linux.AndroidSyscallHandler;
 import com.github.unidbg.linux.GuestCredentials;
 import com.github.unidbg.linux.android.dvm.VM;
+import com.github.unidbg.linux.file.Stdin;
+import com.github.unidbg.memory.mapping.LinuxFileMetadata;
+import com.github.unidbg.unix.IO;
 import io.github.aireposave.unidbg.runtime.spi.WorkerSession;
 import io.github.aireposave.unidbg.runtime.spi.jni.JniConfiguration;
 import io.github.aireposave.unidbg.runtime.spi.jni.RuntimeClassFactory;
@@ -20,6 +30,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.IdentityHashMap;
+import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -94,7 +105,23 @@ final class SessionState extends WorkerSession {
 
     @Override public void configureEmulator(AndroidEmulator emulator) throws IOException {
         if (configured.putIfAbsent(emulator, true) != null) return;
-        ((AndroidSyscallHandler) emulator.getSyscallHandler()).setGuestCredentials(credentials);
+        AndroidSyscallHandler handler = (AndroidSyscallHandler) emulator.getSyscallHandler();
+        handler.setGuestCredentials(credentials);
+        if (handler.getFileIO(IO.FD_STDIN) instanceof Stdin stdin) bindInput(emulator, stdin);
+        handler.addIOResolver(new IOResolver<AndroidFileIO>() {
+            @Override public FileResult<AndroidFileIO> resolve(Emulator<AndroidFileIO> target, String path, int flags) {
+                if (!IO.STDIN.equals(path)) return null;
+                Stdin stdin = new Stdin(flags);
+                bindInput(emulator, stdin);
+                return FileResult.success(stdin);
+            }
+            @Override public FileQueryResult<FileMetadata> queryMetadata(Emulator<AndroidFileIO> target, String path, boolean followLinks) {
+                return null;
+            }
+            @Override public FileQueryResult<List<DirectoryEntry>> queryDirectory(Emulator<AndroidFileIO> target, String path) {
+                return null;
+            }
+        });
         LOG.info("event=guest_credentials_configured uid={} euid={} gid={} egid={} groups={}",
                 credentials.realUid, credentials.effectiveUid, credentials.realGid, credentials.effectiveGid,
                 credentials.supplementaryGroups);
@@ -102,6 +129,12 @@ final class SessionState extends WorkerSession {
         if (guestFiles != null) guestFiles.install(emulator);
         LOG.info("event=emulator_configured backend={} classLoader={} nativeProperties={}",
                 emulator.getBackend().getClass().getName(), emulator.getClass().getClassLoader(), properties);
+    }
+
+    private void bindInput(AndroidEmulator emulator, Stdin stdin) {
+        stdin.setInput(input, () -> LinuxFileMetadata.query(IO.FD_STDIN));
+        LOG.info("event=stdin_source_bound session={} emulator={} file_io={} guest_path={} host_fd={} source=worker_process_stdin",
+                id(), System.identityHashCode(emulator), System.identityHashCode(stdin), IO.STDIN, IO.FD_STDIN);
     }
 
     @Override public void close() throws Exception {

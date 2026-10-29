@@ -18,6 +18,10 @@ public interface WorkerEntrypoint {
 
 `profile()`、`outputDirectory()`、`input()`、`output()`、`checkCancelled()` 提供输入、产物、持久机器通道和协作取消。
 
+`input()` 持有通过公开 [`FileDescriptor.in`](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/FileDescriptor.html#in) 建立的进程标准输入流。`configureEmulator` 将现存的标准输入 `Stdin` 绑定到该流，并通过 resolver 为随后打开的 `IO.STDIN` 建立相同绑定。其他类型的已有标准描述符保持其来源。输入流归进程所有，关闭 guest 描述符或 session 不关闭宿主标准输入。
+
+绑定后的 native `read` 使用该显式输入流，held metadata 与 `fstat` 通过底座 `LinuxFileMetadata.query(IO.FD_STDIN)` 按 [fstat(2)](https://man7.org/linux/man-pages/man2/stat.2.html) 查询同一宿主描述符。`System.setIn` 和 MCP 的合并输入流独立于该来源。库使用实际 `st_mode`，不预设 FIFO、字符设备或普通文件。相对路径使用非目录 `dirfd` 时，由底座按 [access(2)](https://man7.org/linux/man-pages/man2/access.2.html) 返回 `ENOTDIR`。底座未显式绑定的通用 `Stdin` 继续动态读取 `System.in`，metadata 未知；查询所需事实缺失时明确失败。
+
 `configureEmulator(existing)`、`configureVm(vm, jni)` 仅配置，不取得所有权。`createEmulator(factory)` 自动登记并配置新 emulator，`createVm(emulator, apk, jni)` 创建 VM 并接入类工厂。`own(resource)` 登记反序关闭；同一对象重复登记只关闭一次。消费者自行创建 emulator 时，load 失败由 loader 关闭，成功后可登记幂等 LoadResult；不要同时登记 LoadResult 和其 emulator。入口返回之前可提前关闭幂等资源。
 
 ## Native 初始化返回值
