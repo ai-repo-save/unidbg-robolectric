@@ -1,6 +1,6 @@
 # 环境 profile
 
-Android 模式的生效顺序为：worker 在 Android 引导前解析 APK 元数据并写 `effective-request.json`；早期 lifecycle plugin 建立包来源与进程 UID；`RuntimeApplication.onCreate` 投影包元数据、Build、Settings、Preferences 与 services；最后执行工作入口。
+Android 模式的生效顺序：worker 在 Android 引导前解析 APK 元数据并写 `effective-request.json`，设置包名与进程名属性；Android 引导期间早期 lifecycle plugin 建立包来源与进程 UID，`RuntimeApplication.onCreate` 投影包元数据；会话构造时投影 native 属性、Build、Settings、Preferences 与 services，并登记 guest 挂载映射；最后执行工作入口。
 
 顶层字段：
 
@@ -77,4 +77,4 @@ Android 模式的生效顺序为：worker 在 Android 引导前解析 APK 元数
 
 ## filesystem
 
-`filesystem.guestDataDirectory` 指定 guest 数据目录，缺省为 `/data/user/0/<packageName>`，映射到 `Application.getDataDir()`。挂载与路径投影规则在 `docs/profile/package-source.md`。
+`filesystem.guestDataDirectory` 指定 guest 数据目录，缺省为 `/data/user/0/<packageName>`，映射到 `Application.getDataDir()`；挂载在 emulator 配置时安装。挂载与路径投影规则在 `docs/profile/package-source.md`。

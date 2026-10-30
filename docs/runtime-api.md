@@ -113,9 +113,9 @@ Android 模式的引导由 `AndroidBootstrap` 执行：JUnit4 `RobolectricTestRu
 | `systemProperties` | `Map<String,String>` | 追加为 `-D` 参数 |
 | `traceId` | `String` | 关联标识 |
 
-`RuntimeClient.start(RunRequest)` 依次创建 `outputDirectory/logs`、写入 `request.json`、删除旧的 `cancel.request` 与 `result.json`。随后用当前 JVM 的 `java` 与 `jvm-args.txt` 启动 `WorkerMain --request`，把 stderr 重定向到 `logs/stderr.log`，返回 `SessionHandle`。
+`RuntimeClient.start(RunRequest)` 依次创建 `outputDirectory/logs`、删除旧的 `cancel.request` 与 `result.json`、写入 `request.json`。随后用当前 JVM 的 `java` 与 `jvm-args.txt` 启动 `WorkerMain --request`，把 stderr 重定向到 `logs/stderr.log`，返回 `SessionHandle`。
 
-`SessionHandle` 提供 `pid()`、`outputDirectory()`、`completion()`、`send(JsonNode)`、`receive()`、`endInput()`、`cancel()`、`close()`。`receive()` 在 EOF 时返回 `NullNode`。`cancel()` 写 `cancel.request`，在 `cancellationGrace` 内等待根进程退出，随后对整棵子树发送 TERM 与 KILL，并写 `cancellation.json`；存在进程信号时另写 `aborted.json`。
+`SessionHandle` 提供 `pid()`、`outputDirectory()`、`completion()`、`send(JsonNode)`、`receive()`、`endInput()`、`cancel()`、`close()`。`receive()` 在 EOF 时返回 `NullNode`。`cancel()` 等待协作关闭预算并回收整棵子树。
 
 根进程退出后 `completion()` 完成，返回 `RunResult(status, exitCode, pid, payload, failure, outputDirectory)`。状态取 `result.json` 的 `status` 与本地取消标志：取消过或状态为 `CANCELLED` 时为 `CANCELLED`；退出码 0 且状态为 `COMPLETED` 时为 `COMPLETED`；其余为 `FAILED`。子树回收在 `cancel()` 内完成，与 `completion()` 完成时刻没有先后保证。
 

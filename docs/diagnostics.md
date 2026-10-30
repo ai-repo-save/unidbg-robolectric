@@ -37,7 +37,7 @@ worker 使用 Logback 与 Logstash encoder，事件为 JSON lines，写入两个
 | `default_sensors_projected` | INFO | 传感器数 |
 | `application_data_preserved` | INFO | 数据目录来源、证据目标与复制文件数 |
 
-Android 会话在签名验证、包投影、凭据、挂载与每个 services 投影处各产生一个事件。native-only 会话只产生 worker、会话与 emulator 相关事件。root 级别为 INFO，`DEBUG` 级事件（`guest_file_query`、`file_mount_ancestor_retained`）在默认配置下不输出；排查时需调整 `logback.xml` 的级别。
+Android 会话在签名验证、包投影、凭据、挂载与每个 services 投影处各产生一个事件。native-only 会话只产生 worker、会话与 emulator 相关事件。root 级别为 INFO，`DEBUG` 级事件（`guest_file_query`、`file_mount_ancestor_retained`）在默认配置下不输出。
 
 ## 失败
 

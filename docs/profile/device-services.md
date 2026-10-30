@@ -1,6 +1,6 @@
 # 设备服务 profile
 
-`profile.services` 在 `RuntimeApplication.onCreate` 内、工作入口执行前投影到框架服务。支持的键为 `systemFeatures`、`systemAvailableFeatures`、`systemSharedLibraryNames`、`display`、`sensors`、`memory`；其他键使请求失败。
+`profile.services` 在会话构造时投影，即 Application 创建之后、工作入口执行之前。支持的键为 `systemFeatures`、`systemAvailableFeatures`、`systemSharedLibraryNames`、`display`、`sensors`、`memory`；其他键使请求失败。
 
 省略 `services` 或其中某一项时，对应框架状态保持初始值。整数字段要求有符号 32 位 JSON 整数，浮点字段要求可表示为有限 `float` 的 JSON 数字，布尔字段要求 JSON boolean。
 

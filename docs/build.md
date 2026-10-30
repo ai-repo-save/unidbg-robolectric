@@ -17,13 +17,13 @@ unidbg 基准为 `0.13.1`，源码在 `https://github.com/ai-repo-save/unidbg`�
 (
   cd "$HOME/git/unidbg"
   uv run --script scripts/release.py \
-    --baseline <upstream-commit> \
+    --baseline 129151171590d0cfaaf46f98f93f1ac5f97fc401 \
     --java-home /usr/lib/jvm/java-21-openjdk-amd64 \
     --repository "$HOME/git/unidbg/target/release-0.13.1"
 )
 ```
 
-输出目录下的 `release-manifest.json` 记录本次发行使用的源码提交。
+该基线提交对应上游 `fix(android): resolve publicly accessible method declarations`。输出目录下的 `release-manifest.json` 记录 `baseline_commit`、`release_commit` 与本次发行的命令。
 
 Robolectric fork 源码在 `https://github.com/ai-repo-save/robolectric`。core 与完整 framework shadows 同时为 `1.3.0`；core POM 与 Gradle metadata 直接指向 fork framework。包来源 API 来自 core 提交 `786e1d627127434a6c31d86c1cafc031ab0f241c`，`ShadowBuild.setDisplay` 来自 `11038b7cd4addf3c9463a63f16def30ec5df2134`。在 fork 源码目录运行：
 
@@ -50,7 +50,7 @@ APK 元数据解析用 `io.github.ai-repo-save.apk-parser:apk-parser:2.6.11`，�
   :worker:installDist
 ```
 
-三个 `-P` 属性都注册带 group 过滤的 Maven 仓库。省略 `-PunidbgRepository` 或 `-ProbolectricRepository` 时，这两个 group 从 `mavenLocal()` 解析。`apk-parser` group 只由 `-PapkParserRepository` 提供。
+三个 `-P` 属性都注册带 group 过滤的 Maven 仓库。仓库集合还包括 `mavenLocal()`（unidbg、robolectric、unicorn、capstone、keystone、demumble 与 `android-all-instrumented`）、`mavenCentral()`，以及 `google()` 的 `androidx.*` 与 `com.android.tools.build:apksig`。省略 `-PunidbgRepository` 或 `-ProbolectricRepository` 时，这两个 group 从 `mavenLocal()` 解析；`apk-parser` group 只由 `-PapkParserRepository` 提供。
 
 安装目录为 `worker/build/<version>/install/unidbg-worker`。内容为 `bin/`、`lib/`、`sdk/`、`runtime-manifest.json`、`jvm-args.txt`、`LICENSE`：
 

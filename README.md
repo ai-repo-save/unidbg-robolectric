@@ -16,20 +16,9 @@ guest 架构为 ARM64，后端为 Unicorn2，宿主为 Linux x86-64。native res
 
 ## 构建
 
-构建需要 JDK 21、宿主 gcc 和依赖仓库：
-
-```sh
-./gradlew --no-daemon \
-  -PapkParserRepository=/path/to/apk-parser-release-repository \
-  -ProbolectricRepository=/path/to/robolectric-release-repository \
-  :worker:installDist
-```
+构建需要 JDK 21、宿主 gcc 与三个依赖仓库。命令、仓库参数与依赖准备见 `docs/build.md`。
 
 安装目录为 `worker/build/<version>/install/unidbg-worker`；`version` 取 `build.gradle.kts` 中 `allprojects.version` 的值，当前为 1.2.2。
-
-`apk-parser` fork 由 `-PapkParserRepository` 提供，其余依赖从 `mavenLocal()` 与 `mavenCentral()` 解析。`gcc` 用于编译 `libdevice-egl.so`。
-
-依赖准备、离线构建、发行仓库与开发变体见 `docs/build.md`。
 
 ## 验证
 
@@ -39,4 +28,10 @@ guest 架构为 ARM64，后端为 Unicorn2，宿主为 Linux x86-64。native res
 ./gradlew --offline --no-daemon jniIntegration
 ```
 
-真实 APK 来源验证使用 `apkStartupIntegration -PstartupApk=/absolute/input.apk`。测试范围、参数与证据路径见 `docs/verification.md`。
+真实 APK 来源验证使用：
+
+```sh
+./gradlew --offline --no-daemon apkStartupIntegration -PstartupApk=/absolute/input.apk
+```
+
+测试范围、参数与证据路径见 `docs/verification.md`。
