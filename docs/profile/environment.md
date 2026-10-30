@@ -1,6 +1,12 @@
 # 环境 profile
 
-Android 模式的生效顺序：worker 在 Android 引导前解析 APK 元数据并写 `effective-request.json`，设置包名与进程名属性；Android 引导期间早期 lifecycle plugin 建立包来源与进程 UID，`RuntimeApplication.onCreate` 投影包元数据；会话构造时投影 native 属性、Build、Settings、Preferences 与 services，并登记 guest 挂载映射；最后执行工作入口。
+Android 模式的生效顺序：
+
+1. Android 引导前：worker 解析 APK 元数据，写 `effective-request.json`，设置包名与进程名属性。
+2. Android 引导期间：早期 lifecycle plugin 建立包来源与进程 UID；`RuntimeApplication.onCreate` 投影包元数据。
+3. 会话构造时：投影 Build、Settings、Preferences 与 services，并通过 `ShadowSystemProperties.override` 应用 Android 属性的可见值。
+4. emulator 配置时：下发 guest 凭据，安装 libc 属性通道与 guest 挂载。
+5. 工作入口执行。
 
 顶层字段：
 
@@ -63,7 +69,7 @@ Android 模式的生效顺序：worker 在 Android 引导前解析 APK 元数据
 
 ## nativeProperties
 
-属性名到字符串值的映射，键无白名单。值通过 `ShadowSystemProperties.override` 提供给 Android `SystemProperties.get`，并通过 `SystemPropertyHook` 与 `SystemProperties` 模块提供给 libc 查询。两个查询通道使用同一映射，与 Build 静态字段相互独立。
+属性名到字符串值的映射，键无白名单。值通过 `ShadowSystemProperties.override` 提供给 Android `SystemProperties.get`，并通过 `SystemPropertyHook` 与 `SystemProperties` 模块提供给 libc 查询。Android 通道在会话构造时生效，libc 通道在 emulator 配置时安装。两个通道使用同一映射，与 Build 静态字段相互独立。
 
 属性值长度上限为 `PROP_VALUE_MAX - 1` 字节；键与值都不得包含 NUL。Android 模式在未配置时补入 `ro.build.version.sdk=30`；显式值不改变实际运行 SDK。
 
